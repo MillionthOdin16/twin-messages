@@ -1,0 +1,5 @@
+# Don't commit large files
+*.tar.gz
+*.zip
+# Keep logs but don't sync
+logs/*.log
