@@ -3,3 +3,7 @@
 *.zip
 # Keep logs but don't sync
 logs/*.log
+# Secrets
+secret.json
+*.secret
+.env
