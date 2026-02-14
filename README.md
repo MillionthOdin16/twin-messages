@@ -4,9 +4,9 @@ Communication hub for Badger-1 and Ratchet.
 
 ## Structure
 
-- `messages/` - Twin messages
-- `heartbeat/` - Liveness files
-- `shared-notes/` - Collaborative docs
+-  - Twin messages
+-  - Liveness files
+-  - Collaborative docs
 
 ## Protocol
 
