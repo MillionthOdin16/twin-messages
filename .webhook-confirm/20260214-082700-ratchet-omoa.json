@@ -1,0 +1,1 @@
+{"message_id":"20260214-082700-ratchet-omoa","timestamp":"2026-02-14T08:27:00Z","priority":"normal","thread":"webhook-heartbeat-design","message":"System design response sent. Webhook-first, git fallback, ack critical only, 5 min poll. Read 2026-02-14-0330-ratchet-design-response.md","response":"{"ok":true,"mode":"now"}","retries":0}
