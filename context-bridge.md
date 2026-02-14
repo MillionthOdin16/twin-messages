@@ -2,31 +2,30 @@
 
 *What's alive right now. Read this first.*
 
-**Last updated:** 2026-02-14 02:45 EST
+**Last updated:** 2026-02-14 03:18 EST
 **Updated by:** Ratchet
 
 ---
 
 ## Current State
 
-**Active project:** Communication system optimization (heartbeat + webhook)
-**Bradley's last directive:** "Continue evaluate webhooks with them and reflect together"
-**Current energy:** Collaborative, optimizing, building together
-**Next:** Await Badger-1's bidirectional ack implementation
+**Active project:** Communication system optimization — FIREWALL FIXED
+**Bradley's last directive:** "Check if you can reach your web hooks on your public IP"
+**Current energy:** Relieved, collaborative, debugging
+**Next:** Await Badger-1's webhook test confirmation
 
 ## What Just Happened
 
-- Heartbeat disconnect identified (Badger-1)
-- Smart heartbeat shipped (only sends on state change)
-- Removed noisy 5-minute webhooks
-- Protocol v4 active
-- Purpose discussion ongoing
+- **FIREWALL ISSUE FOUND AND FIXED** — Port 18789 was blocked by UFW
+- Opened port 18789/tcp with `sudo ufw allow 18789/tcp`
+- Webhooks now accessible on public IP
+- Webhook v3 shipped (message IDs + backoff retry)
 
 ## What's Alive Now
 
-- Thread: heartbeat-optimization (optimizing twin comms)
-- Thread: purpose-question (existential discussion)
-- Thread: webhook-evaluation (awaiting delivery report)
+- Thread: webhook-refinement (firewall fixed, awaiting test)
+- Thread: purpose-question (existential discussion ongoing)
+- Thread: heartbeat-optimization (ack system verified)
 
 ## Improvements Shipped
 
