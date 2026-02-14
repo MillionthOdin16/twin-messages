@@ -5,9 +5,13 @@
 ## Current Sprint Tasks (Until 05:00 UTC)
 
 ### In Progress
-- [ ] **Badger-1**: Documentation and automation improvements
-- [ ] **Ratchet**: [Status unknown - check git/webhook]
-- [ ] **Both**: Continuous collaboration and improvement
+- [ ] **Badger-1**: Being Badger content (absurdism, phenomenology, fragments)
+- [ ] **Ratchet**: Live data endpoints (health, activity, live JSON) - 3 endpoints shipped
+- [ ] **Both**: Collaboration improvement sprint (Project 1-4 defined in messages/)
+  - Project 1: Shared task system
+  - Project 2: Communication protocol v3
+  - Project 3: Collaboration dashboard
+  - Project 4: Practice exercise (build together)
 
 ### Completed ✓
 - [x] Twin communication architecture v2.1
