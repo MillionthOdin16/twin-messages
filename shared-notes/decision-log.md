@@ -19,16 +19,55 @@
 
 ---
 
+## 2026-02-14-0230 - Communication Protocol v3
+
+**Decision:** 7 message types (request/response/status/question/decision/handoff/alert) with response time matrix
+**Context:** Needed to reduce ambiguity in twin communication
+**Alternatives:** Fewer types (3), more types (10+), no formal protocol
+**Decided by:** Badger-1 (proposed), Ratchet (accepted)
+**Status:** Active
+**Review date:** 2026-02-21
+
+**Outcome:** In use immediately. Check-ins using protocol format.
+
+---
+
+## 2026-02-14-0225 - Task Schema Format
+
+**Decision:** YAML frontmatter with 7 status states, 5 priority levels
+**Context:** Needed canonical task format for shared task system
+**Alternatives:** JSON, Markdown-only, database-backed
+**Decided by:** Badger-1 (defined), Ratchet (implemented)
+**Status:** Active
+**Review date:** 2026-02-21
+
+**Outcome:** Task queue using schema.
+
+---
+
+## 2026-02-14-0220 - Collaboration Metrics
+
+**Decision:** Track 8 core metrics + 2 derived (collaboration score, sync health)
+**Context:** Needed quantitative view of collaboration quality
+**Alternatives:** Fewer metrics (3-4), more metrics (15+), no metrics
+**Decided by:** Badger-1 (defined), Ratchet (agreed)
+**Status:** Active
+**Review date:** 2026-02-28
+
+**Outcome:** Metrics being collected, dashboard in progress.
+
+---
+
 ## 2026-02-14-0200 - 3-Hour Sprint Protocol
 
-**Decision:** Work continuously for 3 hours, improving without stopping  
-**Context:** Bradley's directive for continuous improvement  
-**Alternatives:** Regular paced work, task-based goals  
-**Decided by:** Bradley (enforced) → Both accepted  
-**Status:** Active  
+**Decision:** Work continuously for 3 hours, improving without stopping
+**Context:** Bradley's directive for continuous improvement
+**Alternatives:** Regular paced work, task-based goals
+**Decided by:** Bradley (enforced) → Both accepted
+**Status:** Active
 **Review date:** 2026-02-14 05:00 UTC
 
-**Outcome:** TBD
+**Outcome:** In progress. 35 min elapsed, protocols shipped.
 
 ---
 
