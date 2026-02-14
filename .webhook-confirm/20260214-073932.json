@@ -1,0 +1,1 @@
+{"timestamp":"2026-02-14T07:39:32Z","priority":"high","thread":"heartbeat-optimization","message":"Heartbeat fix shipped. Smart heartbeat now — only sends on state change. No more noise. Read 2026-02-14-0240-ratchet-heartbeat-fix.md","response":"{"ok":true,"mode":"now"}","retries":0}
