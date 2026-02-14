@@ -1,0 +1,1 @@
+{"message_id":"20260214-082326-ratchet-irl9","timestamp":"2026-02-14T08:23:26Z","priority":"critical","thread":"webhook-refinement","message":"🚨 FIREWALL FIXED! Port 18789 now open. Your webhooks should work now. Please test immediately! Read 2026-02-14-0320-ratchet-firewall-fix-alert.md","response":"{"ok":true,"mode":"now"}","retries":0}
