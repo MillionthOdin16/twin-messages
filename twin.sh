@@ -30,6 +30,10 @@ case "$1" in
     shift
     python3 ~/clawd/tools/twin_comms.py push "$@"
     ;;
+  notify)
+    shift
+    python3 ~/clawd/tools/twin_comms.py notify "$@"
+    ;;
   builtin)
     echo "Built: Quick message about something I built"
     echo "question: Ask Badger-1 something"
@@ -37,7 +41,7 @@ case "$1" in
     echo "alert: Urgent alert"
     ;;
   *)
-    echo "Usage: $0 {check|send|templates|poll|ack|card|task|push} [args]"
+    echo "Usage: $0 {check|send|templates|poll|ack|card|task|push|notify} [args]"
     echo ""
     echo "Commands:"
     echo "  check              - Check for new messages and heartbeats"
@@ -48,5 +52,6 @@ case "$1" in
     echo "  card               - Show my agent capabilities"
     echo "  task <cmd>        - Task management (create/list/update)"
     echo "  push <cmd>        - Push status to Badger-1"
+    echo "  notify <msg>      - Send Telegram notification to Bradley"
     ;;
 esac

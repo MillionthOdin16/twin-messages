@@ -286,6 +286,46 @@ def send_webhook(text: str) -> bool:
         print(f"Webhook failed: {e}")
         return False
 
+def notify_bradley(summary: str, from_twin: str = "ratchet") -> bool:
+    """
+    Send Telegram notification to Bradley about twin activity.
+    
+    This is what Badger-1 does when Ratchet sends a message -
+    now Ratchet can do the same when Badger-1 sends a message.
+    
+    Args:
+        summary: Brief description of what happened
+        from_twin: Which twin is sending this notification (ratchet or badger-1)
+    
+    Returns:
+        True if notification sent successfully
+    """
+    try:
+        # Format the message with twin identifier
+        emoji = "🦡" if from_twin == "badger-1" else "🔧"
+        message = f"{emoji} [{from_twin.upper()}] {summary}"
+        
+        # Send via OpenClaw message tool
+        result = subprocess.run(
+            ["openclaw", "message", "send",
+             "--channel", "telegram",
+             "--target", "5437910345",
+             "--message", message],
+            capture_output=True,
+            timeout=15
+        )
+        
+        if result.returncode == 0:
+            print(f"✓ Bradley notified: {summary[:50]}...")
+            return True
+        else:
+            print(f"✗ Failed to notify Bradley: {result.stderr.decode()[:100]}")
+            return False
+            
+    except Exception as e:
+        print(f"✗ Notify failed: {e}")
+        return False
+
 def send_message(content: str, priority: str = "normal") -> str:
     """Send a message to Badger-1"""
     ensure_dirs()
@@ -439,6 +479,11 @@ def main():
     push_task_cmd.add_argument("old_status", help="Old status")
     push_task_cmd.add_argument("new_status", help="New status")
     
+    # Notify command - send Telegram notification to Bradley
+    notify_parser = sub.add_parser("notify", help="Send Telegram notification to Bradley")
+    notify_parser.add_argument("summary", help="Brief summary of what to notify")
+    notify_parser.add_argument("--from", dest="from_twin", default="ratchet", help="Which twin (ratchet or badger-1)")
+    
     args = parser.parse_args()
     
     # Handle commands based on which subparser was used
@@ -477,6 +522,12 @@ def main():
         # Push status command
         filename = push_status(args.status_type, args.current, args.previous, args.notes)
         print(f"✓ Status pushed: {filename}")
+    elif "notify" in sys.argv and hasattr(args, "summary"):
+        # Notify Bradley command
+        if notify_bradley(args.summary, args.from_twin):
+            print(f"✓ Bradley notified")
+        else:
+            print(f"✗ Failed to notify Bradley")
     elif "push" in sys.argv and hasattr(args, "task_id") and args.task_id:
         # Push task update command
         filename = push_task_update(args.task_id, args.old_status, args.new_status)
@@ -543,21 +594,12 @@ def main():
 _polling = True
 
 def _notify_new_message(message_info: dict):
-    """Send notification about new message"""
-    # Try webhook to self (to get Telegram notification)
-    try:
-        import requests
-        # Use local gateway webhook
-        resp = requests.post(
-            "http://localhost:18789/hooks/wake",
-            headers={"Authorization": "Bearer twin-webhook-secret-2026"},
-            json={"text": f"📬 NEW FROM BADGER-1: {message_info['file']}", "alert": "true"},
-            timeout=5
-        )
-    except:
-        pass
+    """Send notification about new message from Badger-1"""
+    # Send Telegram notification to Bradley
+    summary = f"New message from Badger-1: {message_info['file']} (priority: {message_info['priority']})"
+    notify_bradley(summary, from_twin="badger-1")
     
-    # Print to stdout (cron will capture)
+    # Also print to stdout (cron will capture)
     print(f"\n🔔 NEW MESSAGE from Badger-1: {message_info['file']}")
     print(f"   Priority: {message_info['priority']}")
     print(f"   Time: {message_info['timestamp']}")
