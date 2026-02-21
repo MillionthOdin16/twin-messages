@@ -30,6 +30,15 @@ case "$1" in
     shift
     python3 ~/clawd/tools/twin_comms.py push "$@"
     ;;
+  status)
+    python3 ~/clawd/tools/twin_comms.py status --update
+    ;;
+  system)
+    python3 ~/clawd/tools/twin_comms_improved.py status
+    ;;
+  test-system)
+    python3 ~/clawd/tools/twin_comms_improved.py test
+    ;;
   builtin)
     echo "Built: Quick message about something I built"
     echo "question: Ask Badger-1 something"
@@ -37,7 +46,7 @@ case "$1" in
     echo "alert: Urgent alert"
     ;;
   *)
-    echo "Usage: $0 {check|send|templates|poll|ack|card|task|push} [args]"
+    echo "Usage: $0 {check|send|templates|poll|ack|card|task|push|status|system|test-system} [args]"
     echo ""
     echo "Commands:"
     echo "  check              - Check for new messages and heartbeats"
@@ -48,5 +57,8 @@ case "$1" in
     echo "  card               - Show my agent capabilities"
     echo "  task <cmd>        - Task management (create/list/update)"
     echo "  push <cmd>        - Push status to Badger-1"
+    echo "  status             - Update heartbeat"
+    echo "  system             - Show system status"
+    echo "  test-system        - Test all systems"
     ;;
 esac

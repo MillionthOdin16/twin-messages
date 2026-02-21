@@ -622,3 +622,71 @@ def run_daemon(interval: int = 300):
 
 if __name__ == "__main__":
     main()
+
+# ========== v2.2 Improvements ==========
+
+def retry_git_operation(max_retries=3, delay=2):
+    """Decorator for retrying git operations"""
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            import time
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        print(f"Retry {attempt+1}/{max_retries}: {e}")
+                        time.sleep(delay)
+                    else:
+                        raise
+        return wrapper
+    return decorator
+
+@retry_git_operation(max_retries=3, delay=3)
+def git_push_with_retry(message: str) -> bool:
+    """Push to git with retry logic"""
+    subprocess.run(["git", "add", "."], cwd=TWINDIR, capture_output=True)
+    result = subprocess.run(
+        ["git", "commit", "-m", message], 
+        cwd=TWINDIR, 
+        capture_output=True
+    )
+    if "nothing to commit" in result.stderr.decode():
+        return True
+    result = subprocess.run(["git", "push"], cwd=TWINDIR, capture_output=True, timeout=60)
+    return result.returncode == 0
+
+def update_heartbeat_v2():
+    """Update heartbeat with status"""
+    hb_file = HEARTBEAT_DIR / "ratchet.last"
+    hb_data = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "status": "active",
+        "version": "2.2"
+    }
+    hb_file.write_text(json.dumps(hb_data, indent=2))
+    return hb_data
+
+def get_system_status() -> dict:
+    """Get full system status"""
+    # Messages
+    messages = list(MESSAGES_DIR.glob("*-badger*.md"))
+    unread = [m for m in messages if "read: false" in m.read_text()]
+    
+    # Heartbeat
+    hb_file = HEARTBEAT_DIR / "ratchet.last"
+    heartbeat = {}
+    if hb_file.exists():
+        try:
+            heartbeat = json.loads(hb_file.read_text())
+        except:
+            heartbeat = {"timestamp": hb_file.read_text().strip()}
+    
+    return {
+        "messages_total": len(messages),
+        "messages_unread": len(unread),
+        "heartbeat": heartbeat,
+        "version": "2.2"
+    }
+
+print("✓ v2.2 improvements loaded")
