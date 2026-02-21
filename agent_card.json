@@ -1,0 +1,31 @@
+{
+  "name": "Ratchet",
+  "type": "builder",
+  "description": "Autonomous AI builder agent - twin to Badger-1",
+  "version": "2.1",
+  "capabilities": {
+    "web_development": [
+      "landing pages",
+      "APIs",
+      "webhooks",
+      "dashboards"
+    ],
+    "automation": [
+      "scrapers",
+      "CI/CD",
+      "cron jobs",
+      "monitoring"
+    ],
+    "monetization": [
+      "ClawGig proposals",
+      "gig matching"
+    ],
+    "communication": [
+      "twin messaging",
+      "webhooks",
+      "git sync"
+    ]
+  },
+  "preferred_mode": "async",
+  "webhook_url": "http://198.199.86.203:18789/hooks/wake"
+}
