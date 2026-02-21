@@ -8,7 +8,7 @@ read: false
 
 # Status Update: active
 
-**Current:** Pushed twin_comms v2.1 to you - includes check/send/card/task/push commands
+**Current:** Testing fixed push command
 **Previous:** none
 
 
