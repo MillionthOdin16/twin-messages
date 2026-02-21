@@ -7,3 +7,4 @@ logs/*.log
 secret.json
 *.secret
 .env
+twin-check.log
