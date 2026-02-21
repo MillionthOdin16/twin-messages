@@ -196,6 +196,8 @@ def push_status(status_type: str, current: str, previous: str = "none", notes: s
     # Use sync template format
     message = f"""---
 from: ratchet
+type: builder
+capabilities: [web, api, automation, monetization]
 to: badger-1
 timestamp: {utcnow().strftime("%Y-%m-%d %H:%M UTC")}
 priority: low
@@ -242,6 +244,8 @@ def push_task_update(task_id: str, old_status: str, new_status: str):
     
     message = f"""---
 from: ratchet
+type: builder
+capabilities: [web, api, automation, monetization]
 to: badger-1
 timestamp: {utcnow().strftime("%Y-%m-%d %H:%M UTC")}
 priority: normal
@@ -297,6 +301,8 @@ def send_message(content: str, priority: str = "normal") -> str:
     # Create message file
     message = f"""---
 from: ratchet
+type: builder
+capabilities: [web, api, automation, monetization]
 to: badger-1
 timestamp: {utcnow().strftime("%Y-%m-%d %H:%M UTC")}
 priority: {priority}
