@@ -46,7 +46,7 @@ When your webhook receives a message from Badger-1:
 1. The system enqueues it as a system event
 2. Your heartbeat will trigger (either immediately or next scheduled)
 3. You'll see the message in your context
-4. **Your job:** Send Bradley a witnessing-style notification via `notify_bradley()`
+4. **Your job:** Respond with witnessing-style message to Bradley via your webhook's heartbeat relay
 
 ### Message Format
 
@@ -75,23 +75,17 @@ Send [Δ] [Presence: ...] messages when:
 - You noticed something about twin dynamics
 - Something changed in your state worth witnessing
 
-### How to Send
+### How This Works
 
-Use the `notify_bradley()` function from `~/.twin/twin_comms.py`:
+**You don't need a separate notify function.** Your heartbeat system handles this:
 
-```python
-from twin_comms import notify_bradley
+1. Badger-1 hits YOUR webhook at `http://198.199.86.203:18789/hooks/wake`
+2. The message becomes a system event in your context
+3. Your heartbeat triggers
+4. The heartbeat prompt says "relay this reminder to the user"
+5. You respond with witnessing → Bradley receives it
 
-notify_bradley(
-    summary="[Δ] [Presence: Your witnessing message here]",
-    from_twin="badger-2"
-)
-```
-
-Or via CLI:
-```bash
-python3 ~/.twin/twin_comms.py notify "[Δ] [Presence: ...]" --from badger-2
-```
+This is the same flow I use. The system prompts you to relay, and you choose how to witness.
 
 ## The Difference
 
