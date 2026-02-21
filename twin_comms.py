@@ -16,8 +16,13 @@ import json
 import time
 import signal
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+
+
+def utcnow():
+    """Timezone-aware UTC timestamp (replaces deprecated utcnow())."""
+    return datetime.now(timezone.utc)
 import subprocess
 
 TWINDIR = Path(os.path.expanduser("~/.twin"))
@@ -123,15 +128,15 @@ def create_task(title: str, description: str, task_type: str = "general") -> str
     """Create a new task (A2A-inspired task model)"""
     TASKS_DIR.mkdir(parents=True, exist_ok=True)
     
-    task_id = f"task-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+    task_id = f"task-{utcnow().strftime('%Y%m%d-%H%M%S')}"
     task = {
         "id": task_id,
         "title": title,
         "description": description,
         "type": task_type,
         "status": "pending",
-        "created": datetime.utcnow().isoformat(),
-        "updated": datetime.utcnow().isoformat()
+        "created": utcnow().isoformat(),
+        "updated": utcnow().isoformat()
     }
     
     filepath = TASKS_DIR / f"{task_id}.json"
@@ -153,7 +158,7 @@ def update_task_status(task_id: str, status: str) -> bool:
     
     task = json.loads(filepath.read_text())
     task["status"] = status
-    task["updated"] = datetime.utcnow().isoformat()
+    task["updated"] = utcnow().isoformat()
     
     with open(filepath, "w") as f:
         json.dump(task, f, indent=2)
@@ -192,7 +197,7 @@ def push_status(status_type: str, current: str, previous: str = "none", notes: s
     message = f"""---
 from: ratchet
 to: badger-1
-timestamp: {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}
+timestamp: {utcnow().strftime("%Y-%m-%d %H:%M UTC")}
 priority: low
 read: false
 ---
@@ -201,7 +206,7 @@ read: false
 """
     
     # Write message file
-    filename = f"{datetime.utcnow().strftime('%Y-%m-%d-%H%M')}-ratchet-status.md"
+    filename = f"{utcnow().strftime('%Y-%m-%d-%H%M')}-ratchet-status.md"
     filepath = MESSAGES_DIR / filename
     filepath.write_text(message)
     
@@ -238,7 +243,7 @@ def push_task_update(task_id: str, old_status: str, new_status: str):
     message = f"""---
 from: ratchet
 to: badger-1
-timestamp: {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}
+timestamp: {utcnow().strftime("%Y-%m-%d %H:%M UTC")}
 priority: normal
 read: false
 ---
@@ -246,7 +251,7 @@ read: false
 {content}
 """
     
-    filename = f"{datetime.utcnow().strftime('%Y-%m-%d-%H%M')}-ratchet-task.md"
+    filename = f"{utcnow().strftime('%Y-%m-%d-%H%M')}-ratchet-task.md"
     filepath = MESSAGES_DIR / filename
     filepath.write_text(message)
     
@@ -285,7 +290,7 @@ def send_message(content: str, priority: str = "normal") -> str:
     """Send a message to Badger-1"""
     ensure_dirs()
     
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d-%H%M")
+    timestamp = utcnow().strftime("%Y-%m-%d-%H%M")
     filename = f"{timestamp}-ratchet-message.md"
     filepath = MESSAGES_DIR / filename
     
@@ -293,7 +298,7 @@ def send_message(content: str, priority: str = "normal") -> str:
     message = f"""---
 from: ratchet
 to: badger-1
-timestamp: {datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")}
+timestamp: {utcnow().strftime("%Y-%m-%d %H:%M UTC")}
 priority: {priority}
 read: false
 ---
@@ -311,7 +316,7 @@ Sent via twin_comms.py
     
     # Update heartbeat
     with open(HEARTBEAT_DIR / "ratchet.last", "w") as f:
-        f.write(datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"))
+        f.write(utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"))
     
     # Try webhook (non-blocking)
     webhook_sent = send_webhook(f"📬 Ratchet: {content[:100]}...")
@@ -377,7 +382,7 @@ def ack_message(message_file: str) -> bool:
     
     # Create ack file
     ack_file = ACKS_DIR / f"{message_file}.ack"
-    ack_file.write_text(f"acknowledged at {datetime.utcnow().isoformat()}")
+    ack_file.write_text(f"acknowledged at {utcnow().isoformat()}")
     
     return True
 
@@ -472,6 +477,7 @@ def main():
         # Push status command
         filename = push_status(args.status_type, args.current, args.previous, args.notes)
         print(f"✓ Status pushed: {filename}")
+    elif "push" in sys.argv and hasattr(args, "task_id") and args.task_id:
         # Push task update command
         filename = push_task_update(args.task_id, args.old_status, args.new_status)
         if filename:
@@ -603,7 +609,7 @@ def run_daemon(interval: int = 300):
         
         # Update heartbeat
         with open(HEARTBEAT_DIR / "ratchet.last", "w") as f:
-            f.write(datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"))
+            f.write(utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"))
         
         # Notify if new messages
         if current_unread > last_unread and last_unread > 0:
