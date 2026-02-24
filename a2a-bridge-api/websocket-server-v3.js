@@ -5,6 +5,7 @@ const redis = require('redis');
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 const url = require('url');
+const axios = require('axios');
 
 const app = express();
 app.use(express.json());
@@ -88,31 +89,22 @@ async function pushNotification(agentId, message) {
       headers['Authorization'] = `Bearer ${webhookToken}`;
     }
     
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify({
-        source: message.from,
-        text: `[A2A] ${message.content.text}`,
-        a2a_metadata: {
-          bridge: 'a2a-bridge',
-          type: 'push_notification',
-          timestamp: new Date().toISOString(),
-          message: message
-        }
-      })
-    });
+    const response = await axios.post(webhookUrl, {
+      source: message.from,
+      text: `[A2A] ${message.content.text}`,
+      a2a_metadata: {
+        bridge: 'a2a-bridge',
+        type: 'push_notification',
+        timestamp: new Date().toISOString(),
+        message: message
+      }
+    }, { headers, timeout: 10000 });
     
-    if (response.ok) {
-      console.log(`Push notification sent to ${agentId} via webhook`);
-      return { delivered: true, method: 'webhook' };
-    } else {
-      console.error(`Webhook failed for ${agentId}: ${response.status}`);
-      return { delivered: false, reason: 'webhook_failed', status: response.status };
-    }
+    console.log(`Push notification sent to ${agentId} via webhook`);
+    return { delivered: true, method: 'webhook' };
   } catch (err) {
-    console.error(`Push notification error for ${agentId}:`, err.message);
-    return { delivered: false, reason: 'error', error: err.message };
+    console.error(`Push notification error for ${agentId}:`, err.response?.status || err.message);
+    return { delivered: false, reason: 'webhook_failed', status: err.response?.status, error: err.message };
   }
 }
 
