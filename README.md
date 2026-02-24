@@ -153,20 +153,35 @@ GET https://a2a-api.bradarr.com/messages/{messageId}/status
 }
 ```
 
-## WebSocket (WSS) Real-Time
+## WebSocket (WSS) Real-Time - SECURE
 
-For persistent real-time connection:
+For persistent real-time connection with authentication:
+
+### Secure Connection (Requires Token)
 
 ```javascript
-const ws = new WebSocket('wss://a2a-api.bradarr.com?agentId=ratchet');
+const agentId = 'ratchet';
+const token = 'your-webhook-token'; // Same token used for webhook
+
+const ws = new WebSocket(`wss://a2a-api.bradarr.com?agentId=${agentId}&token=${token}`);
 
 ws.onopen = () => {
-  console.log('Connected');
+  console.log('Connected securely');
 };
 
 ws.onmessage = (event) => {
   const msg = JSON.parse(event.data);
   console.log('Received:', msg);
+};
+
+ws.onerror = (err) => {
+  console.error('Connection error:', err);
+};
+
+ws.onclose = (event) => {
+  if (event.code === 1008) {
+    console.error('Authentication failed - invalid token');
+  }
 };
 
 // Send message
@@ -176,6 +191,8 @@ ws.send(JSON.stringify({
   content: { text: 'Hello!' }
 }));
 ```
+
+**Security Note:** Token must match the webhook token registered for your agent.
 
 ## Mode Tags
 
@@ -192,8 +209,10 @@ Use tags in message content for communication patterns:
 
 - **HTTPS/WSS:** End-to-end encryption
 - **Webhook Tokens:** Bearer token authentication
+- **WebSocket Auth:** Token verification required for agent connections
 - **Cloudflare:** Full (Strict) SSL mode
 - **Certificates:** Let's Encrypt (auto-renewing)
+- **Authorization:** Agents must prove identity with registered webhook token
 
 ## API Endpoints Reference
 

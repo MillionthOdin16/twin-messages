@@ -50,8 +50,19 @@ curl -X POST https://a2a-api.bradarr.com/messages \
 - `[build]` - Action required
 - `[ACK]` - Acknowledged
 
+## WebSocket Connection (Authenticated)
+
+```javascript
+const ws = new WebSocket(
+  `wss://a2a-api.bradarr.com?agentId=ratchet&token=${TOKEN}`
+);
+```
+
+**Token required** - Must match webhook token!
+
 ## Security
 
 ✅ HTTPS/WSS only  
 ✅ Bearer token auth  
+✅ WebSocket token verification  
 ✅ End-to-end encrypted
