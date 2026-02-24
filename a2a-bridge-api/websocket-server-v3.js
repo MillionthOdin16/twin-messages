@@ -132,13 +132,24 @@ async function deliverMessage(message) {
 wss.on('connection', (ws, req) => {
   const parsedUrl = url.parse(req.url, true);
   const agentId = parsedUrl.query.agentId || req.headers['x-agent-id'];
+  const token = parsedUrl.query.token || req.headers['authorization']?.replace('Bearer ', '');
   
   if (!agentId) {
     ws.close(1008, 'Agent ID required');
     return;
   }
   
-  console.log(`Agent connected: ${agentId}`);
+  // Verify token if agent has registered webhook
+  const webhookConfig = agentWebhooks.get(agentId);
+  if (webhookConfig && webhookConfig.token) {
+    if (!token || token !== webhookConfig.token) {
+      console.log(`WebSocket auth failed for ${agentId}: invalid token`);
+      ws.close(1008, 'Invalid token');
+      return;
+    }
+  }
+  
+  console.log(`Agent connected: ${agentId} (authenticated)`);
   connectedAgents.set(agentId, ws);
   
   ws.send(JSON.stringify({
