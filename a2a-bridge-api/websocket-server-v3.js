@@ -101,7 +101,7 @@ async function pushNotification(agentId, message) {
     }, { headers, timeout: 10000 });
     
     console.log(`Push notification sent to ${agentId} via webhook`);
-    return { delivered: true, method: 'webhook' };
+    return { notified: true, method: 'webhook', status: 'pending_confirmation' };
   } catch (err) {
     console.error(`Push notification error for ${agentId}:`, err.response?.status || err.message);
     return { delivered: false, reason: 'webhook_failed', status: err.response?.status, error: err.message };
@@ -309,6 +309,63 @@ app.get('/messages/all', async (req, res) => {
     const { limit = 100 } = req.query;
     const messages = await redisClient.lRange('messages:all', 0, parseInt(limit) - 1);
     res.json({ messages: messages.map(m => JSON.parse(m)) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /messages/:messageId/receipt - Delivery receipt
+app.post('/messages/:messageId/receipt', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { agentId, status } = req.body;
+    
+    if (!agentId || !status) {
+      return res.status(400).json({ error: 'agentId and status required' });
+    }
+    
+    if (!['delivered', 'read', 'failed'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Use: delivered, read, failed' });
+    }
+    
+    // Store receipt in Redis
+    const receipt = {
+      messageId,
+      agentId,
+      status,
+      timestamp: new Date().toISOString()
+    };
+    
+    await redisClient.hSet(`receipts:${messageId}`, agentId, JSON.stringify(receipt));
+    await redisClient.expire(`receipts:${messageId}`, 86400); // 24 hour expiry
+    
+    console.log(`Delivery receipt: ${messageId} ${status} by ${agentId}`);
+    res.json({ success: true, receipt });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /messages/:messageId/status - Check delivery status
+app.get('/messages/:messageId/status', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    
+    // Get receipts for this message
+    const receipts = await redisClient.hGetAll(`receipts:${messageId}`);
+    
+    const parsedReceipts = {};
+    for (const [agentId, receiptJson] of Object.entries(receipts)) {
+      parsedReceipts[agentId] = JSON.parse(receiptJson);
+    }
+    
+    res.json({
+      messageId,
+      receipts: parsedReceipts,
+      deliveredTo: Object.keys(parsedReceipts).filter(id => 
+        parsedReceipts[id].status === 'delivered' || parsedReceipts[id].status === 'read'
+      )
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
