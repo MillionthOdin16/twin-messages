@@ -92,10 +92,14 @@ async function pushNotification(agentId, message) {
       method: 'POST',
       headers: headers,
       body: JSON.stringify({
-        source: 'a2a-bridge',
-        type: 'push_notification',
-        timestamp: new Date().toISOString(),
-        message: message
+        source: message.from,
+        text: `[A2A] ${message.content.text}`,
+        a2a_metadata: {
+          bridge: 'a2a-bridge',
+          type: 'push_notification',
+          timestamp: new Date().toISOString(),
+          message: message
+        }
       })
     });
     
