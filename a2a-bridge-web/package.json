@@ -1,0 +1,12 @@
+{
+  "name": "a2a-bridge-web",
+  "version": "1.0.0",
+  "description": "Web interface for A2A Bridge communication monitor",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
