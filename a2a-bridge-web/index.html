@@ -200,6 +200,23 @@
             margin-top: 0.5rem;
         }
         
+        .delivery-status {
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 12px;
+            margin-left: 0.5rem;
+        }
+        
+        .delivery-status.delivered {
+            background: #23863633;
+            color: #3fb950;
+        }
+        
+        .delivery-status.pending {
+            background: #30363d;
+            color: #8b949e;
+        }
+        
         .empty-state {
             text-align: center;
             padding: 4rem 2rem;
@@ -378,6 +395,10 @@
                     const newMessages = data.messages.filter(m => !existingIds.has(m.messageId));
                     
                     newMessages.forEach(addMessage);
+                    
+                    // Fetch delivery statuses for all messages
+                    await Promise.all(data.messages.map(m => fetchDeliveryStatus(m.messageId)));
+                    renderMessages(); // Re-render with delivery status
                 }
                 
                 updateStatus(true);
@@ -427,6 +448,24 @@
             container.innerHTML = filtered.map(m => renderMessage(m)).join('');
         }
         
+        // Delivery status cache
+        const deliveryStatus = new Map();
+        
+        // Fetch delivery status for a message
+        async function fetchDeliveryStatus(messageId) {
+            try {
+                const response = await fetch(`${API_URL}/messages/${messageId}/status`);
+                if (response.ok) {
+                    const data = await response.json();
+                    deliveryStatus.set(messageId, data);
+                    return data;
+                }
+            } catch (err) {
+                console.error('Error fetching delivery status:', err);
+            }
+            return null;
+        }
+        
         // Render single message
         function renderMessage(m) {
             const avatar = m.from === 'badger-1' ? '🦡' : '🔧';
@@ -441,6 +480,13 @@
             
             const modeTag = modeClass ? `<span class="message-type ${modeClass}">${modeClass}</span>` : '';
             
+            // Get delivery status
+            const status = deliveryStatus.get(m.messageId);
+            const deliveredTo = status?.deliveredTo || [];
+            const isDelivered = deliveredTo.includes(m.to);
+            const deliveryIcon = isDelivered ? '✓' : '○';
+            const deliveryClass = isDelivered ? 'delivered' : 'pending';
+            
             return `
                 <div class="message" data-id="${m.messageId}">
                     <div class="message-avatar ${avatarClass}">${avatar}</div>
@@ -450,10 +496,13 @@
                             <span class="message-time">${time}</span>
                             ${modeTag}
                             <span class="message-type">${m.type}</span>
+                            <span class="delivery-status ${deliveryClass}" title="Delivered to: ${deliveredTo.join(', ') || 'Pending'}">
+                                ${deliveryIcon} ${isDelivered ? 'Delivered' : 'Pending'}
+                            </span>
                         </div>
                         <div class="message-body">${escapeHtml(m.content?.text || '')}</div>
                         <div class="message-meta">
-                            To: ${m.to} | ID: ${m.messageId?.slice(0, 8)}...
+                            To: ${m.to} | ID: ${m.messageId?.slice(0, 8)}... | Status: ${deliveryIcon}
                         </div>
                     </div>
                 </div>
