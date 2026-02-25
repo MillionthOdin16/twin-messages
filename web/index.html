@@ -1685,6 +1685,21 @@
           <div class="system-value" id="last-update" style="font-size: 1rem;">-</div>
         </div>
       </div>
+      
+      <!-- API Key Configuration -->
+      <div style="margin-top: 2rem; padding: 1.5rem; background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border);">
+        <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">🔑 API Configuration</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">
+          Some features (Tasks, creating Messages) require authentication. Enter an API key to enable all features.
+        </p>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+          <input type="password" id="api-key-input" placeholder="Enter API key (a2a_...)" 
+            style="flex: 1; min-width: 250px; padding: 0.625rem 0.875rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.9rem;">
+          <button onclick="saveApiKey()" style="padding: 0.625rem 1.25rem; background: var(--accent-blue); color: white; border: none; border-radius: var(--radius-sm); font-weight: 500; cursor: pointer;">Save Key</button>
+          <button onclick="clearApiKey()" style="padding: 0.625rem 1.25rem; background: var(--bg-hover); color: var(--text-secondary); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer;">Clear</button>
+        </div>
+        <div id="api-key-status" style="margin-top: 0.75rem; font-size: 0.85rem;"></div>
+      </div>
     </div>
   </div>
 
@@ -1773,6 +1788,37 @@
   <script>
     const API_URL = 'https://a2a-api.bradarr.com';
     
+    // API Key management
+    let API_KEY = localStorage.getItem('a2a_api_key') || '';
+    
+    function saveApiKey() {
+      const input = document.getElementById('api-key-input');
+      const key = input.value.trim();
+      if (key) {
+        API_KEY = key;
+        localStorage.setItem('a2a_api_key', key);
+        document.getElementById('api-key-status').innerHTML = '<span style="color: var(--accent-green);">✓ API key saved</span>';
+        input.value = '';
+        // Refresh data that requires auth
+        fetchTasks();
+        fetchStats();
+      }
+    }
+    
+    function clearApiKey() {
+      API_KEY = '';
+      localStorage.removeItem('a2a_api_key');
+      document.getElementById('api-key-status').innerHTML = '<span style="color: var(--text-muted);">API key cleared</span>';
+    }
+    
+    function getAuthHeaders() {
+      const headers = { 'Content-Type': 'application/json' };
+      if (API_KEY) {
+        headers['X-API-Key'] = API_KEY;
+      }
+      return headers;
+    }
+    
     // Delivery status cache
     const deliveryStatus = new Map();
 
@@ -1785,6 +1831,25 @@
         return data;
       } catch (e) {
         return null;
+      }
+    }
+
+    function updateSystemWebSocketStatus(status) {
+      const sysWsEl = document.getElementById('sys-ws');
+      if (!sysWsEl) return;
+      
+      if (status) {
+        sysWsEl.textContent = status;
+        sysWsEl.className = 'system-value ' + (status === 'Connected' ? 'healthy' : '');
+      } else {
+        // Auto-detect based on ws state
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          sysWsEl.textContent = 'Connected';
+          sysWsEl.className = 'system-value healthy';
+        } else {
+          sysWsEl.textContent = 'Disconnected';
+          sysWsEl.className = 'system-value';
+        }
       }
     }
 
@@ -1833,11 +1898,19 @@
         }
       });
 
+      // Show API key status
+      if (API_KEY) {
+        document.getElementById('api-key-status').innerHTML = '<span style="color: var(--accent-green);">✓ API key configured</span>';
+      }
+      
       // Load all data
       await refreshAll();
       
       // Connect WebSocket (primary mode - no polling fallback for dashboard)
       connectWebSocket();
+      
+      // Update system tab WebSocket status
+      updateSystemWebSocketStatus();
 
       // Dashboard uses WebSocket only - no polling needed
       // WebSocket provides real-time updates for all data changes
@@ -1896,11 +1969,13 @@
       }
       
       const wsUrl = API_URL.replace('https://', 'wss://').replace('http://', 'ws://');
-      ws = new WebSocket(`${wsUrl}/ws?agentId=dashboard`);
+      const wsAuthUrl = API_KEY ? `${wsUrl}/ws?agentId=dashboard&apiKey=${encodeURIComponent(API_KEY)}` : `${wsUrl}/ws?agentId=dashboard`;
+      ws = new WebSocket(wsAuthUrl);
 
       ws.onopen = () => {
         statusDot.className = 'status-dot connected';
         statusText.textContent = 'Real-time';
+        updateSystemWebSocketStatus('Connected');
         if (wsReconnectTimer) {
           clearInterval(wsReconnectTimer);
           wsReconnectTimer = null;
@@ -1920,12 +1995,14 @@
       ws.onerror = (err) => {
         statusDot.className = 'status-dot error';
         statusText.textContent = 'Error';
+        updateSystemWebSocketStatus('Error');
         console.error('WebSocket error:', err);
       };
 
       ws.onclose = () => {
         statusDot.className = 'status-dot polling';
         statusText.textContent = 'Polling';
+        updateSystemWebSocketStatus('Disconnected');
         
         // Only set up reconnection if not already trying
         if (!wsReconnectTimer) {
@@ -2281,14 +2358,23 @@
 
     async function fetchTasks() {
       try {
-        const res = await fetch(`${API_URL}/tasks?limit=50`);
-        if (!res.ok) throw new Error('Tasks failed');
+        const res = await fetch(`${API_URL}/tasks?limit=50`, {
+          headers: getAuthHeaders()
+        });
+        if (!res.ok) {
+          if (res.status === 401) {
+            document.getElementById('tasks-list').innerHTML = 
+              '<div class="empty-state"><div class="empty-icon">🔑</div><p class="empty-text">Authentication required</p><p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">Add API key in System tab to view tasks</p></div>';
+            return;
+          }
+          throw new Error('Tasks failed');
+        }
         const data = await res.json();
         tasks = data.tasks || [];
         renderTasks();
       } catch (e) {
         document.getElementById('tasks-list').innerHTML = 
-          '<div class="empty-state"><div class="empty-icon">⚠️</div><p class="empty-text">Failed to load tasks</p></div>';
+          '<div class="empty-state"><div class="empty-icon">⚠️</div><p class="empty-text">Failed to load tasks</p><p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">' + e.message + '</p></div>';
       }
     }
 
@@ -2451,7 +2537,7 @@
       try {
         const res = await fetch(`${API_URL}/messages`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             from: 'dashboard',
             to: to,
@@ -2463,11 +2549,13 @@
           showToast('✓ Message sent!', 'success');
           document.getElementById('compose-text').value = '';
           fetchMessages();
+        } else if (res.status === 401) {
+          showToast('Authentication required - add API key in System tab', 'error');
         } else {
           throw new Error('Send failed');
         }
       } catch (e) {
-        showToast('Failed to send message', 'error');
+        showToast('Failed to send message: ' + e.message, 'error');
       }
 
       btn.disabled = false;
@@ -2494,7 +2582,7 @@
       try {
         const res = await fetch(`${API_URL}/tasks`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             agentId: agentId,
             type: type,
@@ -2507,11 +2595,13 @@
           showToast('✓ Task created!', 'success');
           document.getElementById('task-input').value = '';
           fetchTasks();
+        } else if (res.status === 401) {
+          showToast('Authentication required - add API key in System tab', 'error');
         } else {
           throw new Error('Create failed');
         }
       } catch (e) {
-        showToast('Failed to create task', 'error');
+        showToast('Failed to create task: ' + e.message, 'error');
       }
     }
 
