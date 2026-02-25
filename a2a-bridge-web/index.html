@@ -60,21 +60,6 @@
         .badge-ratchet { background: rgba(16, 185, 129, 0.25); color: #10b981; }
         
         .status-indicator { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-secondary); }
-        
-        .keyboard-hints {
-            display: flex;
-            gap: 0.5rem;
-            font-size: 0.6rem;
-            color: var(--text-muted);
-            margin-left: 1rem;
-        }
-        
-        .kbd {
-            background: var(--bg-hover);
-            padding: 0.1rem 0.3rem;
-            border-radius: 3px;
-            border: 1px solid var(--border);
-        }
         .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); }
         .status-dot.error { background: var(--accent-red); }
         
@@ -175,6 +160,20 @@
         .error-banner.show { display: block; }
         
         .refresh-info { font-size: 0.65rem; color: var(--text-muted); text-align: center; margin-top: 0.5rem; }
+        
+        .compose-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem; margin-bottom: 0.75rem; }
+        .compose-header { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-secondary); }
+        .compose-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .compose-select { flex: 1; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; color: var(--text-primary); font-size: 0.85rem; }
+        .compose-textarea { width: 100%; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; color: var(--text-primary); font-size: 0.85rem; resize: none; min-height: 60px; font-family: inherit; }
+        .compose-textarea:focus { outline: none; border-color: var(--accent-blue); }
+        .compose-btn { background: var(--accent-blue); border: none; border-radius: 6px; padding: 0.5rem 1rem; color: white; font-size: 0.8rem; cursor: pointer; }
+        .compose-btn:hover { opacity: 0.9; }
+        .compose-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .compose-success { color: var(--accent-green); font-size: 0.75rem; margin-top: 0.5rem; display: none; }
+        .compose-success.show { display: block; }
+        
+        .send-btn { background: var(--accent-green); }
     </style>
 </head>
 <body>
@@ -190,10 +189,6 @@
             <div class="status-indicator">
                 <span class="status-dot" id="status-dot"></span>
                 <span id="status-text">Loading...</span>
-                <div class="keyboard-hints">
-                    <span><span class="kbd">1-4</span> tabs</span>
-                    <span><span class="kbd">R</span> refresh</span>
-                </div>
             </div>
         </div>
     </header>
@@ -235,6 +230,20 @@
         </div>
         
         <div class="tab-content" id="messages">
+            <div class="compose-box">
+                <div class="compose-header">✉️ Send Message</div>
+                <div class="compose-row">
+                    <select class="compose-select" id="compose-to">
+                        <option value="ratchet">To: 🔧 Ratchet</option>
+                        <option value="badger-1">To: 🦡 Badger-1</option>
+                    </select>
+                </div>
+                <textarea class="compose-textarea" id="compose-text" placeholder="Type your message..."></textarea>
+                <div class="compose-row" style="margin-top: 0.5rem;">
+                    <button class="compose-btn send-btn" onclick="sendMessage()">Send</button>
+                    <span class="compose-success" id="compose-success">✓ Sent!</span>
+                </div>
+            </div>
             <div class="controls">
                 <button class="btn active" onclick="filterMessages('all')">All</button>
                 <button class="btn" onclick="filterMessages('badger-1')">🦡</button>
@@ -285,7 +294,7 @@
             </div>
         </div>
         
-        <div class="refresh-info">WebSocket: real-time | Fallback: 60s | Last: <span id="last-update">-</span></div>
+        <div class="refresh-info">Auto-refresh: 15s | Last: <span id="last-update">-</span></div>
     </div>
 
     <script>
@@ -318,63 +327,6 @@
             document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
         }
         
-        let ws = null;
-        let wsReconnectTimeout = null;
-        
-        function connectWebSocket() {
-            if (ws && ws.readyState === WebSocket.OPEN) return;
-            
-            const wsUrl = 'wss://a2a-api.bradarr.com?agentId=observer';
-            try {
-                ws = new WebSocket(wsUrl);
-                
-                ws.onopen = () => {
-                    console.log('WebSocket connected');
-                    document.getElementById('sys-ws').textContent = '✓ Connected';
-                    document.getElementById('sys-ws').className = 'system-value healthy';
-                };
-                
-                ws.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        console.log('WS message:', data);
-                        
-                        // Handle different message types
-                        if (data.type === 'message' || data.type === 'new_message') {
-                            fetchMessages(); // Refresh messages on new message
-                        }
-                        if (data.type === 'task_update' || data.type === 'task') {
-                            fetchTasks(); // Refresh tasks on update
-                        }
-                        if (data.type === 'stats_update') {
-                            fetchStats();
-                        }
-                        
-                        // Show notification
-                        showToast(`Received: ${data.type || 'event'}`);
-                    } catch (e) {
-                        console.log('WS parse error:', e);
-                    }
-                };
-                
-                ws.onclose = () => {
-                    console.log('WebSocket disconnected');
-                    document.getElementById('sys-ws').textContent = '✗ Reconnecting...';
-                    document.getElementById('sys-ws').className = 'system-value error';
-                    // Reconnect after 5s
-                    wsReconnectTimeout = setTimeout(connectWebSocket, 5000);
-                };
-                
-                ws.onerror = (e) => {
-                    console.log('WebSocket error:', e);
-                };
-            } catch (e) {
-                console.log('WS connection failed:', e);
-                document.getElementById('sys-ws').textContent = '✗ Failed';
-                document.getElementById('sys-ws').className = 'system-value error';
-            }
-        }
-        
         async function init() {
             try {
                 await Promise.all([fetchStats(), fetchMessages(), fetchTasks(), fetchAgents()]);
@@ -383,26 +335,13 @@
                 showError('Error: ' + e.message);
             }
             
-            // Connect WebSocket for real-time updates
-            connectWebSocket();
-            
-            // Fallback polling (slower since WS handles real-time)
             setInterval(async () => {
                 try {
                     await Promise.all([fetchStats(), fetchMessages(), fetchTasks()]);
                 } catch (e) {
                     showError('Update failed: ' + e.message);
                 }
-            }, 60000); // 60s fallback
-        }
-        
-        function showToast(message) {
-            const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.textContent = message;
-            toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--bg-card);border:1px solid var(--border);padding:0.5rem 1rem;border-radius:8px;font-size:0.75rem;z-index:1000;animation:fadeIn 0.3s;';
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
+            }, 15000);
         }
         
         async function fetchStats() {
@@ -421,33 +360,12 @@
         }
         
         function renderStats() {
-            const msgByAgent = stats.messages?.byAgent || {};
-            const taskStats = stats.tasks || {};
-            
             document.getElementById('stat-messages').textContent = stats.messages?.total || 0;
-            document.getElementById('stat-tasks').textContent = taskStats.active || 0;
+            document.getElementById('stat-tasks').textContent = stats.tasks?.active || 0;
             document.getElementById('stat-agents').textContent = stats.agents?.webhooks || 0;
             document.getElementById('stat-webhooks').textContent = stats.agents?.webhooks || 0;
             document.getElementById('sys-apikeys').textContent = stats.agents?.apiKeys || 0;
             document.getElementById('sys-connected').textContent = (stats.agents?.connected || []).join(', ') || 'None';
-            
-            // Show task breakdown
-            const taskBreakdown = document.getElementById('tasks-breakdown');
-            if (taskBreakdown) {
-                taskBreakdown.innerHTML = `
-                    <span class="task-breakdown-item completed">✓ ${taskStats.completed || 0}</span>
-                    <span class="task-breakdown-item active">◐ ${taskStats.active || 0}</span>
-                    <span class="task-breakdown-item failed">✗ ${taskStats.failed || 0}</span>
-                `;
-            }
-            
-            // Show message breakdown
-            const msgBreakdown = document.getElementById('messages-breakdown');
-            if (msgBreakdown) {
-                msgBreakdown.innerHTML = Object.entries(msgByAgent).map(([agent, count]) => 
-                    `<span class="msg-breakdown-item">${agent}: ${count}</span>`
-                ).join(' ');
-            }
             
             const lastActivity = stats.agents?.lastActivity || {};
             document.getElementById('badger-last').textContent = lastActivity['badger-1'] ? formatTimeAgo(lastActivity['badger-1']) : 'Never';
@@ -555,26 +473,14 @@
         function renderAgents() {
             const lastActivity = stats.agents?.lastActivity || {};
             
-            // Fetch individual agent details
-            agents.forEach(async (a) => {
-                try {
-                    const res = await fetch(`${API_URL}/agents/${a.agentId}`);
-                    if (res.ok) {
-                        const details = await res.json();
-                        a.lastActivity = details.lastActivity;
-                        a.status = details.status;
-                    }
-                } catch (e) {}
-            });
-            
             const overview = document.getElementById('agent-grid');
             overview.innerHTML = agents.map(a => `
-                <div class="agent-card ${a.agentId === 'badger-1' ? 'badger' : 'ratchet'}" onclick="showAgentDetails('${a.agentId}')">
+                <div class="agent-card ${a.agentId === 'badger-1' ? 'badger' : 'ratchet'}">
                     <div class="agent-header">
                         <div class="agent-avatar">${a.agentId === 'badger-1' ? '🦡' : '🔧'}</div>
                         <div class="agent-info">
                             <h3>${a.agentId}</h3>
-                            <span class="agent-status ${a.status || 'offline'}">${a.status || 'offline'}</span>
+                            <span class="agent-status ${a.status}">${a.status || 'offline'}</span>
                         </div>
                     </div>
                     <div class="agent-stats">
@@ -591,7 +497,7 @@
                             <div class="agent-stat-label">API Key</div>
                         </div>
                     </div>
-                    <div class="last-activity">Last activity: <span id="${a.agentId}-last">${lastActivity[a.agentId] ? formatRelativeTime(new Date(lastActivity[a.agentId])) : 'Unknown'}</span></div>
+                    <div class="last-activity">Last activity: <span id="${a.agentId}-last">${lastActivity[a.agentId] ? formatTimeAgo(lastActivity[a.agentId]) : 'Unknown'}</span></div>
                 </div>
             `).join('');
             
@@ -631,6 +537,42 @@
             return `${Math.floor(hours / 24)}d ago`;
         }
         
+        async function sendMessage() {
+            const to = document.getElementById('compose-to').value;
+            const text = document.getElementById('compose-text').value.trim();
+            const successEl = document.getElementById('compose-success');
+            const btn = document.querySelector('.send-btn');
+            
+            if (!text) return;
+            
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+            
+            try {
+                const res = await fetch(`${API_URL}/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        from: 'badger-1',
+                        to: to,
+                        content: { text: text }
+                    })
+                });
+                
+                if (res.ok) {
+                    successEl.classList.add('show');
+                    document.getElementById('compose-text').value = '';
+                    setTimeout(() => successEl.classList.remove('show'), 2000);
+                    fetchMessages(); // Refresh
+                }
+            } catch (e) {
+                alert('Failed to send: ' + e.message);
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Send';
+        }
+        
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -638,13 +580,22 @@
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'r' && !e.ctrlKey && !e.metaKey) refreshAll();
-            if (e.key >= '1' && e.key <= '4') {
-                const tabs = ['overview', 'messages', 'tasks', 'agents'];
+            // Ignore if typing in textarea
+            if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+            
+            const tabs = ['overview', 'messages', 'tasks', 'agents', 'system'];
+            if (e.key >= '1' && e.key <= '5') {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                document.querySelector(`[data-tab="${tabs[parseInt(e.key)-1]}"]`)?.classList.add('active');
-                document.getElementById(tabs[parseInt(e.key)-1])?.classList.add('active');
+                document.querySelector(`.tab[data-tab="${tabs[parseInt(e.key)-1]}"]`).classList.add('active');
+                document.getElementById(tabs[parseInt(e.key)-1]).classList.add('active');
+            }
+            if (e.key.toLowerCase() === 'r') {
+                fetchStats(); fetchMessages(); fetchTasks();
+            }
+            if (e.key.toLowerCase() === 'c') {
+                document.querySelector(`.tab[data-tab="messages"]`).click();
+                document.getElementById('compose-text').focus();
             }
         });
         
