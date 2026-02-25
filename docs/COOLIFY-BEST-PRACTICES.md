@@ -98,20 +98,21 @@ ENV NODE_OPTIONS="--max-old-space-size=512"
 
 ### Enable Auto-Deploy
 
+**Status:** ✅ Already configured for twin-messages
+
+**Setup:**
 ```bash
-# Check current settings
-coolify app get <uuid>
-
-# Enable auto-deploy
-coolify app update <uuid> --auto-deploy=true
+# GitHub webhook automatically created via API
+gh api repos/MillionthOdin16/twin-messages/hooks \
+  --method POST \
+  --input webhook.json
 ```
 
-### Webhook-Based Deploy
+**Webhook URL:** `https://coolify.bradarr.com/webhooks/deploy/<project-uuid>/<environment-uuid>`
 
-Add to GitHub/GitLab repo settings:
-
-```
-https://coolify.bradarr.com/webhooks/deploy/<project-uuid>/<environment>
+**To verify:**
+```bash
+gh api repos/MillionthOdin16/twin-messages/hooks | jq '.[].active'
 ```
 
 **Benefits:**
@@ -120,6 +121,10 @@ https://coolify.bradarr.com/webhooks/deploy/<project-uuid>/<environment>
 - Faster iteration
 
 ---
+
+### Manual Webhook Configuration
+
+If setting up manually:
 
 ## 5. Redis Best Practices
 

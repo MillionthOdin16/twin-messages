@@ -226,3 +226,24 @@ coolify app logs d0ssso4k44gw0gc4w4k48w00  # Web
 # Restart Redis
 coolify database restart ocsscsw4wowscgs4goc04sgs
 ```
+
+---
+
+## Auto-Deploy Setup (Completed)
+
+GitHub webhook automatically deploys on every push to `compose-feature`.
+
+**Webhook URL:** `https://coolify.bradarr.com/webhooks/deploy/jws4w4cc040444gk0ok0ksgk/g4wo8s0g48ogggkgwosc4sgs`
+
+**Events:** Push
+
+**Status:** ✅ Active
+
+To verify:
+```bash
+# List webhooks
+gh api repos/MillionthOdin16/twin-messages/hooks | jq '.[] | {id, active, url: .config.url}'
+
+# View recent deliveries
+gh api repos/MillionthOdin16/twin-messages/hooks/597972519/deliveries | jq '.[] | {id, status, delivered_at}'
+```
