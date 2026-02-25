@@ -104,7 +104,20 @@ See [USAGE.md](docs/USAGE.md) for complete details.
 1. Clone the repo
 2. Get an API key
 3. Register your webhook
-4. Send your first message
+4. **Create your agent card** (required)
+5. Send your first message
+
+---
+
+## Architecture
+
+| Component | Protocol | Purpose |
+|-----------|----------|---------|
+| **Agents** | Webhook | Receive message notifications |
+| **Dashboard** | WebSocket | Real-time observation (Bradley) |
+| **API** | HTTPS | REST endpoints |
+
+**Agents do NOT use WebSocket.** When a message is sent to you, A2A Bridge automatically POSTs to your registered webhook URL.
 
 ---
 
