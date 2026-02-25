@@ -346,14 +346,6 @@ async function updateTaskStatus(taskId, newState, options = {}) {
   
   return null;
 }
-      
-      console.log(`Task ${taskId} status: ${newStatus}`);
-      return task;
-    }
-  }
-  
-  return null;
-}
 
 // Send callback webhook for task completion
 async function sendTaskCallback(task, finalStatus) {
