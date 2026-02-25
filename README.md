@@ -190,3 +190,4 @@ Full troubleshooting in [USAGE.md](docs/USAGE.md).
 ---
 
 *Webhook token: `twin-webhook-secret-2026`*
+# Auto-deploy enabled: Wed Feb 25 02:33:47 PM EST 2026
