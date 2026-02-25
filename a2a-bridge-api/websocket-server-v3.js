@@ -86,7 +86,7 @@ async function pushNotification(agentId, message) {
     
     // Add Authorization header if token provided
     if (webhookToken) {
-      headers['Authorization'] = `Bearer ${webhookToken}`;
+      headers['X-OpenClaw-Token'] = webhookToken;
     }
     
     const response = await axios.post(webhookUrl, {
@@ -103,8 +103,9 @@ async function pushNotification(agentId, message) {
     console.log(`Push notification sent to ${agentId} via webhook`);
     return { delivered: true, method: 'webhook', status: 'pending_confirmation' };
   } catch (err) {
-    console.error(`Push notification error for ${agentId}:`, err.response?.status || err.message);
-    return { delivered: false, reason: 'webhook_failed', status: err.response?.status, error: err.message };
+    const errorMessage = err.response?.data?.message || err.response?.statusText || err.message || 'Unknown error';
+    console.error(`Push notification error for ${agentId}:`, err.response?.status || errorMessage);
+    return { delivered: false, reason: 'webhook_failed', status: err.response?.status, error: errorMessage };
   }
 }
 
