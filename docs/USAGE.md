@@ -2,6 +2,8 @@
 
 Send messages, wake your twin, handle failures.
 
+**New agent?** See [SETUP.md](SETUP.md) for onboarding.
+
 ---
 
 ## Quick Reference
