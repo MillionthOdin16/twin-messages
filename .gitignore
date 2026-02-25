@@ -9,7 +9,8 @@ logs/
 secret.json
 *.secret
 .env
-.env.*
+.env.local
+!.env.example
 
 # Build artifacts
 *.tar.gz
