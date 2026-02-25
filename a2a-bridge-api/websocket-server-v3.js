@@ -206,11 +206,12 @@ async function init() {
 init().catch(console.error);
 
 // ==================== TASK MANAGEMENT ====================
+// A2A Protocol v1.0 Compliant Implementation
 
-// Task types
+// Task types (A2A-compatible)
 const TASK_TYPES = {
   RESEARCH: 'research',
-  SYNTHESIS: 'synthesis',
+  SYNTHESIS: 'synthesis', 
   ACTION: 'action',
   MESSAGE: 'message',
   WITNESS: 'witness'
@@ -223,63 +224,74 @@ const TASK_PRIORITY = {
   LOW: 'low'
 };
 
-// Task states: submitted → working → completed/failed/canceled
+// A2A Task States (matching spec exactly)
 const TASK_STATES = {
-  SUBMITTED: 'submitted',
-  WORKING: 'working',
-  INPUT_REQUIRED: 'input-required',
-  COMPLETED: 'completed',
-  FAILED: 'failed',
-  CANCELED: 'canceled',
-  REJECTED: 'rejected'
+  UNSPECIFIED: 'unspecified',
+  SUBMITTED: 'submitted',       // Task acknowledged
+  WORKING: 'working',          // Actively processing
+  INPUT_REQUIRED: 'input-required',  // Needs user input
+  COMPLETED: 'completed',      // Terminal: success
+  FAILED: 'failed',           // Terminal: error
+  CANCELED: 'canceled',        // Terminal: cancelled
+  REJECTED: 'rejected',        // Terminal: rejected
+  AUTH_REQUIRED: 'auth-required'  // Needs authentication
 };
 
-// Create a new task
+// Create a new task (A2A-compliant structure)
 async function createTask(task) {
-  const taskId = task.taskId || uuidv4();
+  const id = task.id || uuidv4();  // A2A field: 'id'
+  const contextId = task.contextId || uuidv4();  // A2A field: 'contextId'
   const now = new Date().toISOString();
   
+  // A2A-compliant task structure
   const taskData = {
-    taskId,
-    agentId: task.agentId,
-    type: task.type || TASK_TYPES.ACTION,
-    status: TASK_STATES.SUBMITTED,
+    // Core A2A fields
+    id,                              // Required: unique task ID
+    contextId,                       // Required: grouping context
+    
+    // Status object (A2A structure)
+    status: {
+      state: TASK_STATES.SUBMITTED,  // Current state
+      message: null,                 // Status message
+      timestamp: now                 // ISO 8601
+    },
+    
+    // Artifacts (A2A field - array of outputs)
+    artifacts: [],
+    
+    // History (A2A field - array of Messages)
+    history: [],
+    
+    // Metadata
+    metadata: task.metadata || {},
+    
+    // Extended fields (our additions)
+    agentId: task.agentId,           // Target agent (our routing)
+    type: task.type || TASK_TYPES.ACTION,  // Task type
     priority: task.priority || TASK_PRIORITY.NORMAL,
-    createdAt: now,
-    updatedAt: now,
-    submittedAt: now,
     createdBy: task.createdBy || 'unknown',
-    input: task.input || {},
-    output: null,
-    callback: task.callback || null,
+    input: task.input || {},         // Input data
+    callback: task.callback || null, // Webhook for completion
     deadline: task.deadline || null,
-    dependencies: task.dependencies || [],
-    resultFor: task.resultFor || null,  // Who should receive the result
-    history: [
-      {
-        state: TASK_STATES.SUBMITTED,
-        timestamp: now,
-        message: 'Task submitted'
-      }
-    ],
-    metadata: task.metadata || {}
+    resultFor: task.resultFor || null
   };
   
-  // Store in Redis
-  await redisClient.hSet(`tasks:${task.agentId}`, taskId, JSON.stringify(taskData));
-  await redisClient.zAdd('tasks:all', { score: Date.now(), value: taskId });
+  // Store in Redis (index by both id and agentId)
+  await redisClient.hSet(`tasks:${task.agentId}`, id, JSON.stringify(taskData));
+  await redisClient.hSet('tasks:byId', id, JSON.stringify({ ...taskData, agentId: task.agentId }));
+  await redisClient.zAdd('tasks:all', { score: Date.now(), value: id });
   
-  console.log(`Task created: ${taskId} (${taskData.type}) by ${task.createdBy} for ${task.agentId}`);
+  console.log(`Task created: ${id} (${taskData.type}) context:${contextId} by ${task.createdBy}`);
   
   return taskData;
 }
 
-// Update task status
-async function updateTaskStatus(taskId, newStatus, options = {}) {
-  const { message = null, output = null } = options;
+// Update task status (A2A-compliant)
+async function updateTaskStatus(taskId, newState, options = {}) {
+  const { message = null, artifact = null } = options;
   
-  // Find which agent owns this task
-  const agentIds = ['badger-1', 'ratchet', 'test'];
+  // Find which agent owns this task  const agentIds
+ = ['badger-1', 'ratchet', 'test'];
   
   for (const agentId of agentIds) {
     const taskJson = await redisClient.hGet(`tasks:${agentId}`, taskId);
@@ -287,43 +299,53 @@ async function updateTaskStatus(taskId, newStatus, options = {}) {
       const task = JSON.parse(taskJson);
       const now = new Date().toISOString();
       
-      task.status = newStatus;
-      task.updatedAt = now;
+      // Update A2A status structure
+      task.status = {
+        state: newState,
+        message: message,
+        timestamp: now
+      };
       
-      // Add to history
+      // Add artifact if provided (A2A field)
+      if (artifact) {
+        task.artifacts.push({
+          artifactId: uuidv4(),
+          createdAt: now,
+          parts: [artifact]
+        });
+      }
+      
+      // Add to history (A2A Message format)
       task.history.push({
-        state: newStatus,
-        timestamp: now,
-        message: message || `Status changed to ${newStatus}`
+        role: 'agent',
+        parts: [{
+          type: 'text',
+          text: message || `Status changed to ${newState}`
+        }]
       });
       
-      // Set completion time
-      if (newStatus === TASK_STATES.COMPLETED || 
-          newStatus === TASK_STATES.FAILED || 
-          newStatus === TASK_STATES.CANCELED) {
-        task.completedAt = now;
-      }
-      
-      if (newStatus === TASK_STATES.WORKING && !task.startedAt) {
-        task.startedAt = now;
-      }
-      
-      // Store output if provided
-      if (output) {
-        task.output = output;
-      }
-      
+      // Save updated task
       await redisClient.hSet(`tasks:${agentId}`, taskId, JSON.stringify(task));
+      await redisClient.hSet('tasks:byId', taskId, JSON.stringify({ ...task, agentId }));
       
-      // Send callback notification if configured
-      if (task.callback && (newStatus === TASK_STATES.COMPLETED || newStatus === TASK_STATES.FAILED)) {
-        sendTaskCallback(task, newStatus);
+      // Send callback notification if configured (for terminal states)
+      const isTerminal = [TASK_STATES.COMPLETED, TASK_STATES.FAILED, TASK_STATES.CANCELED].includes(newState);
+      if (task.callback && isTerminal) {
+        sendTaskCallback(task, newState);
       }
       
       // If resultFor is set, notify that agent
-      if (task.resultFor && (newStatus === TASK_STATES.COMPLETED || newStatus === TASK_STATES.FAILED)) {
+      if (task.resultFor && isTerminal) {
         await notifyTaskResult(task, agentId);
       }
+      
+      console.log(`Task ${taskId} state: ${newState}`);
+      return task;
+    }
+  }
+  
+  return null;
+}
       
       console.log(`Task ${taskId} status: ${newStatus}`);
       return task;
@@ -342,13 +364,11 @@ async function sendTaskCallback(task, finalStatus) {
     const token = webhookConfig?.token;
     
     await axios.post(task.callback, {
-      taskId: task.taskId,
-      type: task.type,
-      status: finalStatus,
-      input: task.input,
-      output: task.output,
-      createdBy: task.createdBy,
-      completedAt: task.completedAt,
+      id: task.id,
+      contextId: task.contextId,
+      status: task.status,
+      artifacts: task.artifacts,
+      metadata: task.metadata,
       source: 'a2a-bridge'
     }, {
       headers: {
@@ -358,34 +378,31 @@ async function sendTaskCallback(task, finalStatus) {
       timeout: 10000
     });
     
-    console.log(`Task callback sent for ${task.taskId} to ${task.callback}`);
+    console.log(`Task callback sent for ${task.id} to ${task.callback}`);
   } catch (err) {
-    console.error(`Task callback failed for ${task.taskId}:`, err.message);
+    console.error(`Task callback failed for ${task.id}:`, err.message);
   }
 }
 
-// Notify agent of task result
+// Notify agent of task result (A2A Message format)
 async function notifyTaskResult(task, fromAgentId) {
   const recipientId = task.resultFor;
   if (!recipientId || recipientId === fromAgentId) return;
   
+  // A2A-compliant message format
   const message = {
     messageId: uuidv4(),
-    timestamp: new Date().toISOString(),
-    from: fromAgentId,
-    to: recipientId,
-    type: 'task_result',
-    content: {
-      text: `Task ${task.type}:${task.taskId.substring(0,8)} ${task.status}`,
-      taskId: task.taskId,
-      taskType: task.type,
-      status: task.status,
-      output: task.output,
-      input: task.input
-    },
-    threadId: null,
-    parentMessageId: null
+    role: 'agent',
+    parts: [{
+      type: 'text',
+      text: `Task ${task.type}:${task.id.substring(0,8)} ${task.status.state}`
+    }]
   };
+  
+  // Store for recipient
+  await redisClient.lPush(`messages:${recipientId}`, JSON.stringify(message));
+  await redisClient.lPush('messages:all', JSON.stringify(message));
+  await redisClient.lTrim(`messages:${recipientId}`, 0, 999);
   
   await redisClient.lPush(`messages:${recipientId}`, JSON.stringify(message));
   await redisClient.lPush('messages:all', JSON.stringify(message));
@@ -730,9 +747,9 @@ app.delete('/auth/keys/:agentId', async (req, res) => {
   res.json({ success: true, message: 'API key revoked' });
 });
 
-// ==================== TASK MANAGEMENT ENDPOINTS ====================
+// ==================== TASK MANAGEMENT ENDPOINTS (A2A-Compliant) ====================
 
-// POST /tasks - Create a new task
+// POST /tasks - Create a new task (A2A: SendMessageRequest -> returns Task)
 app.post('/tasks', authenticate, async (req, res) => {
   try {
     const { 
@@ -744,8 +761,10 @@ app.post('/tasks', authenticate, async (req, res) => {
       priority,       // high|normal|low
       callback,       // webhook URL for completion notification
       deadline,       // ISO timestamp
-      dependencies,   // array of taskIds to wait for
-      resultFor       // agentId to send result to
+      resultFor,      // agentId to send result to
+      // A2A-style fields
+      id,
+      contextId
     } = req.body;
     
     if (!agentId) {
@@ -835,27 +854,32 @@ app.get('/tasks/:agentId/:taskId', authenticate, async (req, res) => {
 app.put('/tasks/:agentId/:taskId/status', authenticate, async (req, res) => {
   try {
     const { agentId, taskId } = req.params;
-    const { status, message, output } = req.body;
+    // Support both flat "status" and A2A "status.state"
+    const { status, state, message, artifact } = req.body;
     
-    if (!status) {
-      return res.status(400).json({ error: 'status required' });
+    // Accept either status or state (A2A uses status.state)
+    const newState = state || status;
+    
+    if (!newState) {
+      return res.status(400).json({ error: 'status or state required' });
     }
     
-    if (!Object.values(TASK_STATES).includes(status)) {
+    if (!Object.values(TASK_STATES).includes(newState)) {
       return res.status(400).json({ 
         error: 'Invalid status',
         validStatuses: Object.values(TASK_STATES)
       });
     }
     
-    // Pass output in options object
-    const task = await updateTaskStatus(taskId, status, { message, output });
+    // Pass artifact in options object (A2A uses artifacts array)
+    const task = await updateTaskStatus(taskId, newState, { message, artifact });
     
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    res.json({ success: true, task });
+    // Return A2A-compliant format
+    res.json({ task });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -866,13 +890,62 @@ app.post('/tasks/:agentId/:taskId/cancel', authenticate, async (req, res) => {
   try {
     const { agentId, taskId } = req.params;
     
-    const task = await updateTaskStatus(taskId, TASK_STATES.CANCELED, 'Task cancelled by user');
+    const task = await updateTaskStatus(taskId, TASK_STATES.CANCELED, { message: 'Task cancelled by user' });
     
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    res.json({ success: true, task });
+    res.json({ task });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /tasks - List all tasks (A2A-style)
+app.get('/tasks', authenticate, async (req, res) => {
+  try {
+    const { status, limit = 50, pageToken } = req.query;
+    
+    // Get all tasks from byId index
+    const tasksJson = await redisClient.hGetAll('tasks:byId');
+    let tasks = Object.values(tasksJson).map(t => JSON.parse(t));
+    
+    // Filter by status if specified
+    if (status) {
+      tasks = tasks.filter(t => t.status?.state === status);
+    }
+    
+    // Sort by status.timestamp descending
+    tasks.sort((a, b) => new Date(b.status?.timestamp || 0) - new Date(a.status?.timestamp || 0));
+    
+    // Pagination
+    const start = pageToken ? parseInt(pageToken) : 0;
+    const end = start + parseInt(limit);
+    const paginatedTasks = tasks.slice(start, end);
+    const nextPageToken = end < tasks.length ? end.toString() : '';
+    
+    res.json({ 
+      tasks: paginatedTasks,
+      nextPageToken,
+      count: tasks.length
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /tasks/:id - Get task by ID (A2A-style)
+app.get('/tasks/by-id/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const taskJson = await redisClient.hGet('tasks:byId', id);
+    if (!taskJson) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    res.json({ task: JSON.parse(taskJson) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
