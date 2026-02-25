@@ -121,12 +121,24 @@ async function deliverMessage(message) {
       ...message
     }));
     console.log(`Message delivered to ${recipientId} via WebSocket`);
-    return { delivered: true, method: 'websocket' };
+    return { delivered: true, method: 'websocket', timestamp: new Date().toISOString() };
   }
   
   // Fallback to push notification
   console.log(`${recipientId} not connected via WebSocket, trying push notification...`);
-  return await pushNotification(recipientId, message);
+  const result = await pushNotification(recipientId, message);
+  
+  // Store notification timestamp
+  if (result.notified) {
+    await redisClient.hSet(`notifications:${message.messageId}`, recipientId, JSON.stringify({
+      notified: true,
+      method: 'webhook',
+      timestamp: new Date().toISOString()
+    }));
+    await redisClient.expire(`notifications:${message.messageId}`, 86400); // 24h expiry
+  }
+  
+  return result;
 }
 
 // WebSocket connection handler
@@ -371,12 +383,141 @@ app.get('/messages/:messageId/status', async (req, res) => {
       parsedReceipts[agentId] = JSON.parse(receiptJson);
     }
     
+    // Get notification info
+    const notifications = await redisClient.hGetAll(`notifications:${messageId}`);
+    const parsedNotifications = {};
+    for (const [agentId, notifJson] of Object.entries(notifications)) {
+      parsedNotifications[agentId] = JSON.parse(notifJson);
+    }
+    
     res.json({
       messageId,
       receipts: parsedReceipts,
       deliveredTo: Object.keys(parsedReceipts).filter(id => 
         parsedReceipts[id].status === 'delivered' || parsedReceipts[id].status === 'read'
-      )
+      ),
+      notifications: parsedNotifications,
+      notifiedTo: Object.keys(parsedNotifications).filter(id => parsedNotifications[id].notified)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /messages/:agentId/undelivered - Get only undelivered messages
+app.get('/messages/:agentId/undelivered', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { limit = 50 } = req.query;
+    
+    // Get all messages for this agent
+    const messages = await redisClient.lRange(`messages:${agentId}`, 0, parseInt(limit) - 1);
+    const parsedMessages = messages.map(m => JSON.parse(m));
+    
+    // Filter to only undelivered (no receipt for this agent)
+    const undelivered = [];
+    for (const message of parsedMessages) {
+      const receipt = await redisClient.hGet(`receipts:${message.messageId}`, agentId);
+      if (!receipt) {
+        undelivered.push(message);
+      }
+    }
+    
+    res.json({ 
+      messages: undelivered,
+      count: undelivered.length,
+      total: parsedMessages.length
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /messages/:agentId/stats - Get message statistics for agent
+app.get('/messages/:agentId/stats', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    // Get all messages
+    const messages = await redisClient.lRange(`messages:${agentId}`, 0, -1);
+    const parsedMessages = messages.map(m => JSON.parse(m));
+    
+    // Count delivered vs undelivered
+    let delivered = 0;
+    let undelivered = 0;
+    let read = 0;
+    
+    for (const message of parsedMessages) {
+      const receipt = await redisClient.hGet(`receipts:${message.messageId}`, agentId);
+      if (receipt) {
+        const parsed = JSON.parse(receipt);
+        if (parsed.status === 'read') read++;
+        else if (parsed.status === 'delivered') delivered++;
+      } else {
+        undelivered++;
+      }
+    }
+    
+    // Get recent activity
+    const lastMessage = parsedMessages[0];
+    
+    res.json({
+      agentId,
+      total: parsedMessages.length,
+      delivered,
+      undelivered,
+      read,
+      lastActivity: lastMessage?.timestamp || null,
+      lastMessageId: lastMessage?.messageId || null
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /agents/:agentId/status - Detailed agent status
+app.get('/agents/:agentId/status', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    // Check if connected via WebSocket
+    const ws = connectedAgents.get(agentId);
+    const isConnected = ws && ws.readyState === WebSocket.OPEN;
+    
+    // Check webhook registration
+    const webhookConfig = agentWebhooks.get(agentId);
+    const hasWebhook = !!webhookConfig;
+    
+    // Get message stats
+    const messages = await redisClient.lRange(`messages:${agentId}`, 0, -1);
+    const parsedMessages = messages.map(m => JSON.parse(m));
+    
+    let delivered = 0;
+    let undelivered = 0;
+    
+    for (const message of parsedMessages) {
+      const receipt = await redisClient.hGet(`receipts:${message.messageId}`, agentId);
+      if (receipt) delivered++;
+      else undelivered++;
+    }
+    
+    res.json({
+      agentId,
+      status: isConnected ? 'online' : 'offline',
+      websocket: {
+        connected: isConnected
+      },
+      webhook: {
+        registered: hasWebhook,
+        url: webhookConfig?.url || (typeof webhookConfig === 'string' ? webhookConfig : null)
+      },
+      messages: {
+        total: parsedMessages.length,
+        delivered,
+        undelivered,
+        pending: undelivered
+      },
+      lastSeen: isConnected ? new Date().toISOString() : null
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
