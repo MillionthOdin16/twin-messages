@@ -1264,3 +1264,89 @@ app.get('/health', async (req, res) => {
     res.status(500).json({ status: 'unhealthy', error: err.message });
   }
 });
+
+// GET /stats - Quick stats summary
+app.get('/stats', async (req, res) => {
+  try {
+    // Message counts
+    const allMessages = await redisClient.lRange('messages:all', 0, -1);
+    const messages = allMessages.map(m => JSON.parse(m));
+    
+    // Task counts
+    const allTasks = await redisClient.hGetAll('tasks:byId');
+    const tasks = Object.values(allTasks).map(t => JSON.parse(t));
+    
+    const activeTasks = tasks.filter(t => !['completed', 'failed', 'canceled'].includes(t.status?.state));
+    
+    // Agent last activity (from message timestamps)
+    const agentLastActivity = {};
+    for (const msg of messages) {
+      if (!agentLastActivity[msg.from] || new Date(msg.timestamp) > new Date(agentLastActivity[msg.from])) {
+        agentLastActivity[msg.from] = msg.timestamp;
+      }
+      if (!agentLastActivity[msg.to] || new Date(msg.timestamp) > new Date(agentLastActivity[msg.to])) {
+        agentLastActivity[msg.to] = msg.timestamp;
+      }
+    }
+    
+    res.json({
+      messages: {
+        total: messages.length,
+        byAgent: messages.reduce((acc, m) => { acc[m.from] = (acc[m.from] || 0) + 1; return acc; }, {})
+      },
+      tasks: {
+        total: tasks.length,
+        active: activeTasks.length,
+        completed: tasks.filter(t => t.status?.state === 'completed').length,
+        failed: tasks.filter(t => t.status?.state === 'failed').length
+      },
+      agents: {
+        connected: Array.from(connectedAgents.keys()),
+        webhooks: agentWebhooks.size,
+        apiKeys: apiKeys.size,
+        lastActivity: agentLastActivity
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /agents/:agentId - Get agent info (alias for status)
+app.get('/agents/:agentId', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    const ws = connectedAgents.get(agentId);
+    const isConnected = ws && ws.readyState === WebSocket.OPEN;
+    
+    const webhookConfig = agentWebhooks.get(agentId);
+    const hasWebhook = !!webhookConfig;
+    const hasApiKey = apiKeys.has(agentId);
+    
+    // Get last activity from messages
+    const allMessages = await redisClient.lRange('messages:all', 0, -1);
+    const messages = allMessages.map(m => JSON.parse(m)).reverse();
+    
+    let lastActivity = null;
+    for (const msg of messages) {
+      if (msg.from === agentId || msg.to === agentId) {
+        lastActivity = msg.timestamp;
+        break;
+      }
+    }
+    
+    res.json({
+      agentId,
+      status: isConnected ? 'online' : (hasWebhook ? 'webhook' : 'offline'),
+      isConnected,
+      hasWebhook,
+      hasApiKey,
+      lastActivity,
+      connectedAt: connectedAgents.get(agentId)?.connectedAt || null
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
