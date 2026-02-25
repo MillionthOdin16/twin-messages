@@ -98,11 +98,11 @@ ENV NODE_OPTIONS="--max-old-space-size=512"
 
 ### Enable Auto-Deploy
 
-**Status:** ✅ Already configured for twin-messages
+**Status:** ⚠️ Partially configured for twin-messages (Cloudflare blocking)
 
 **Setup:**
 ```bash
-# GitHub webhook automatically created via API
+# GitHub webhook created via API
 gh api repos/MillionthOdin16/twin-messages/hooks \
   --method POST \
   --input webhook.json
@@ -114,6 +114,11 @@ gh api repos/MillionthOdin16/twin-messages/hooks \
 ```bash
 gh api repos/MillionthOdin16/twin-messages/hooks | jq '.[].active'
 ```
+
+**Known Issue:** If using Cloudflare, webhooks may be blocked (302 redirect). Solutions:
+1. Create Cloudflare page rule: Disable security for `*/webhooks/deploy/*`
+2. Whitelist GitHub webhook IPs
+3. Use GitHub Actions with Coolify API token instead
 
 **Benefits:**
 - Deploy on every push

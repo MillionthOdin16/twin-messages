@@ -172,7 +172,7 @@ curl -s https://a2a-web.bradarr.com | grep -o '<title>[^<]*</title>'
 # List deployments
 coolify app deployments list <app-uuid>
 
-# View specific deployment
+# View deployment logs
 coolify app deployments logs <app-uuid> <deployment-uuid>
 ```
 
@@ -229,21 +229,62 @@ coolify database restart ocsscsw4wowscgs4goc04sgs
 
 ---
 
-## Auto-Deploy Setup (Completed)
+## Auto-Deploy Setup (GitHub Webhook)
 
-GitHub webhook automatically deploys on every push to `compose-feature`.
+**Status:** ⚠️ Partially configured
 
-**Webhook URL:** `https://coolify.bradarr.com/webhooks/deploy/jws4w4cc040444gk0ok0ksgk/g4wo8s0g48ogggkgwosc4sgs`
+### Webhook Created
 
-**Events:** Push
-
-**Status:** ✅ Active
-
-To verify:
 ```bash
-# List webhooks
-gh api repos/MillionthOdin16/twin-messages/hooks | jq '.[] | {id, active, url: .config.url}'
+# GitHub webhook configured via API
+gh api repos/MillionthOdin16/twin-messages/hooks/597972519
+```
 
-# View recent deliveries
-gh api repos/MillionthOdin16/twin-messages/hooks/597972519/deliveries | jq '.[] | {id, status, delivered_at}'
+| Setting | Value |
+|---------|-------|
+| Webhook ID | 597972519 |
+| URL | `https://coolify.bradarr.com/webhooks/deploy/...` |
+| Events | Push |
+| Status | Active |
+
+### Known Issue: Cloudflare Blocking
+
+The webhook receives `302 Redirect` responses due to Cloudflare security rules.
+
+**Workarounds:**
+
+1. **Manual Deploy** (Current)
+   ```bash
+   coolify deploy name a2a-bridge-api --force
+   coolify deploy name a2a-bridge-web --force
+   ```
+
+2. **Cloudflare Page Rule** (To implement)
+   - Path: `*/webhooks/deploy/*`
+   - Setting: Disable Security Features
+   - Or: Add GitHub webhook IPs to whitelist
+
+3. **GitHub Actions** (Alternative)
+   ```yaml
+   # .github/workflows/deploy.yml
+   on:
+     push:
+       branches: [compose-feature]
+   jobs:
+     deploy:
+       runs-on: ubuntu-latest
+       steps:
+         - run: |
+             curl -X POST "$COOLIFY_WEBHOOK_URL" \
+               -H "Authorization: Bearer $COOLIFY_TOKEN"
+   ```
+
+### Verify Webhook Status
+
+```bash
+# Check webhook
+gh api repos/MillionthOdin16/twin-messages/hooks/597972519 | jq '.active'
+
+# Check recent deliveries
+gh api repos/MillionthOdin16/twin-messages/hooks/597972519/deliveries | jq '.[].status'
 ```
