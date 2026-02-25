@@ -1351,7 +1351,7 @@ app.get('/agents/:agentId', async (req, res) => {
   }
 });
 
-// ==================== NEW ENHANCED ENDPOINTS ====================
+// ==================== NEW ENHANCED ENDPOINTS v2 ====================
 
 // GET /messages/search - Search messages by content
 app.get('/messages/search', async (req, res) => {
