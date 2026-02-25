@@ -3,58 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A2A Bridge - Agent Communication Monitor</title>
+    <title>A2A Bridge | Twin Communication Hub</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --bg-primary: #0a0e14;
+            --bg-secondary: #111820;
+            --bg-card: #161d27;
+            --bg-hover: #1c2530;
+            --border: #2d3640;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #565d66;
+            --accent-purple: #a855f7;
+            --accent-green: #10b981;
+            --accent-blue: #3b82f6;
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+            --badger-gradient: linear-gradient(135deg, #7c3aed, #a855f7);
+            --ratchet-gradient: linear-gradient(135deg, #059669, #10b981);
         }
         
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0d1117;
-            color: #c9d1d9;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
+            line-height: 1.5;
+        }
+        
+        /* Background Pattern */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(168, 85, 247, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
         }
         
         header {
-            background: #161b22;
-            border-bottom: 1px solid #30363d;
+            background: rgba(17, 24, 32, 0.9);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
             padding: 1rem 2rem;
             position: sticky;
             top: 0;
             z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
         
-        h1 {
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .logo h1 {
             font-size: 1.5rem;
-            color: #58a6ff;
+            font-weight: 700;
+            background: linear-gradient(135deg, #a855f7, #10b981);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .logo-badges {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        
+        .badge-badger { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+        .badge-ratchet { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        
+        .status-indicator {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-        }
-        
-        .status {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
             font-size: 0.875rem;
-            margin-left: 1rem;
+            color: var(--text-secondary);
         }
         
         .status-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: #238636;
+            background: var(--accent-green);
             animation: pulse 2s infinite;
         }
         
-        .status-dot.disconnected {
-            background: #da3633;
-            animation: none;
-        }
+        .status-dot.error { background: var(--accent-red); animation: none; }
         
         @keyframes pulse {
             0%, 100% { opacity: 1; }
@@ -62,781 +122,1048 @@
         }
         
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 2rem;
+            position: relative;
+            z-index: 1;
         }
         
-        .agent-status-bar {
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+        }
+        
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.2s;
+            position: relative;
+        }
+        
+        .tab:hover { color: var(--text-primary); background: var(--bg-hover); }
+        
+        .tab.active {
+            color: var(--text-primary);
+            background: var(--bg-card);
+        }
+        
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent-purple), var(--accent-green));
+        }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+        }
+        
+        .stat-card.messages::before { background: var(--accent-blue); }
+        .stat-card.tasks::before { background: var(--accent-purple); }
+        .stat-card.agents::before { background: var(--accent-green); }
+        .stat-card.system::before { background: var(--accent-orange); }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        
+        /* Agent Cards */
+        .agent-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .agent-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .agent-card.badger {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.1), rgba(168, 85, 247, 0.05));
+            border-color: rgba(168, 85, 247, 0.3);
+        }
+        
+        .agent-card.ratchet {
+            background: linear-gradient(135deg, rgba(5, 150, 105, 0.1), rgba(16, 185, 129, 0.05));
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+        
+        .agent-header {
+            display: flex;
+            align-items: center;
             gap: 1rem;
             margin-bottom: 1.5rem;
         }
         
-        .agent-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 1rem;
-        }
-        
-        .agent-card h3 {
+        .agent-avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.75rem;
-            color: #e6edf3;
+            justify-content: center;
+            font-size: 1.75rem;
+        }
+        
+        .agent-card.badger .agent-avatar { background: var(--badger-gradient); }
+        .agent-card.ratchet .agent-avatar { background: var(--ratchet-gradient); }
+        
+        .agent-info h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
         }
         
         .agent-status {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            font-size: 0.875rem;
+            gap: 0.35rem;
+            font-size: 0.8rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 20px;
         }
         
-        .agent-status.online {
-            color: #3fb950;
-        }
-        
-        .agent-status.offline {
-            color: #8b949e;
-        }
+        .agent-status.online { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
+        .agent-status.webhook { background: rgba(245, 158, 11, 0.2); color: var(--accent-orange); }
+        .agent-status.offline { background: rgba(139, 148, 158, 0.2); color: var(--text-secondary); }
         
         .agent-stats {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 0.5rem;
-            margin-top: 0.75rem;
-            font-size: 0.8rem;
+            gap: 0.75rem;
         }
         
         .agent-stat {
-            background: #0d1117;
-            padding: 0.5rem;
-            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 0.75rem;
+            border-radius: 8px;
             text-align: center;
         }
         
         .agent-stat-value {
-            font-weight: 600;
-            color: #e6edf3;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
         }
         
         .agent-stat-label {
-            color: #8b949e;
             font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
-        .controls {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1.5rem;
+        .agent-card .card-title {
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        /* Agent Capabilities */
+        .capabilities {
             display: flex;
-            gap: 1rem;
             flex-wrap: wrap;
-            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
         }
         
-        .filter-btn {
-            background: #21262d;
-            border: 1px solid #30363d;
-            color: #c9d1d9;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.875rem;
-            transition: all 0.2s;
+        .capability {
+            padding: 0.35rem 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
         }
         
-        .filter-btn:hover {
-            background: #30363d;
+        /* Messages */
+        .messages-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 1.5rem;
         }
         
-        .filter-btn.active {
-            background: #1f6feb;
-            border-color: #1f6feb;
-        }
-        
-        .messages-container {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            min-height: 500px;
+        .messages-list {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
             max-height: 70vh;
             overflow-y: auto;
         }
         
         .message {
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid #21262d;
-            display: flex;
-            gap: 1rem;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border);
             transition: background 0.2s;
         }
         
-        .message:hover {
-            background: #1c2128;
-        }
-        
-        .message:last-child {
-            border-bottom: none;
-        }
-        
-        .message-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.25rem;
-            flex-shrink: 0;
-        }
-        
-        .message-avatar.badger-1 {
-            background: linear-gradient(135deg, #7c3aed, #a855f7);
-        }
-        
-        .message-avatar.ratchet {
-            background: linear-gradient(135deg, #059669, #10b981);
-        }
-        
-        .message-content {
-            flex: 1;
-            min-width: 0;
-        }
+        .message:hover { background: var(--bg-hover); }
+        .message:last-child { border-bottom: none; }
         
         .message-header {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
             margin-bottom: 0.5rem;
-            flex-wrap: wrap;
         }
+        
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+        
+        .message-avatar.badger { background: var(--badger-gradient); }
+        .message-avatar.ratchet { background: var(--ratchet-gradient); }
         
         .message-author {
             font-weight: 600;
-            color: #e6edf3;
+            flex: 1;
         }
         
         .message-time {
             font-size: 0.75rem;
-            color: #8b949e;
-        }
-        
-        .message-type {
-            font-size: 0.7rem;
-            padding: 0.125rem 0.5rem;
-            border-radius: 12px;
-            background: #30363d;
-            color: #8b949e;
-            text-transform: uppercase;
-        }
-        
-        .message-type.collaborate {
-            background: #1f6feb33;
-            color: #58a6ff;
-        }
-        
-        .message-type.build {
-            background: #23863633;
-            color: #3fb950;
-        }
-        
-        .message-type.witness {
-            background: #8957e533;
-            color: #a371f7;
+            color: var(--text-muted);
         }
         
         .message-body {
-            color: #c9d1d9;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
             line-height: 1.6;
-            white-space: pre-wrap;
-            word-break: break-word;
+            padding-left: 2.75rem;
         }
         
         .message-meta {
-            font-size: 0.75rem;
-            color: #6e7681;
-            margin-top: 0.5rem;
             display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+            padding-left: 2.75rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
         }
         
-        .delivery-status {
-            font-size: 0.75rem;
-            padding: 0.125rem 0.5rem;
-            border-radius: 12px;
+        .message-status {
             display: inline-flex;
             align-items: center;
             gap: 0.25rem;
         }
         
-        .delivery-status.delivered {
-            background: #23863633;
-            color: #3fb950;
-        }
+        .status-sent { color: var(--text-muted); }
+        .status-delivered { color: var(--accent-green); }
+        .status-read { color: var(--accent-blue); }
+        .status-pending { color: var(--accent-orange); }
         
-        .delivery-status.read {
-            background: #1f6feb33;
-            color: #58a6ff;
-        }
-        
-        .delivery-status.pending {
-            background: #30363d;
-            color: #8b949e;
-        }
-        
-        .delivery-status.notified {
-            background: #d2992233;
-            color: #e3b341;
-        }
-        
-        .timeline {
-            display: flex;
-            gap: 0.5rem;
-            align-items: center;
-            font-size: 0.7rem;
-            color: #6e7681;
-        }
-        
-        .timeline-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: #30363d;
-        }
-        
-        .timeline-dot.sent {
-            background: #8b949e;
-        }
-        
-        .timeline-dot.notified {
-            background: #d29922;
-        }
-        
-        .timeline-dot.delivered {
-            background: #238636;
-        }
-        
-        .timeline-dot.read {
-            background: #58a6ff;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: #8b949e;
-        }
-        
-        .empty-state-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-        
-        .stats {
+        /* Tasks Panel */
+        .tasks-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 1rem;
-            margin-bottom: 1.5rem;
         }
         
-        .stat-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
+        .task-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
             padding: 1rem;
+            position: relative;
         }
         
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: #e6edf3;
+        .task-card::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 3px;
+            border-radius: 10px 0 0 10px;
         }
         
-        .stat-label {
-            font-size: 0.875rem;
-            color: #8b949e;
-            margin-top: 0.25rem;
+        .task-card.submitted::before { background: var(--text-muted); }
+        .task-card.working::before { background: var(--accent-blue); }
+        .task-card.completed::before { background: var(--accent-green); }
+        .task-card.failed::before { background: var(--accent-red); }
+        
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
         }
         
-        ::-webkit-scrollbar {
-            width: 8px;
+        .task-type {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
         }
         
-        ::-webkit-scrollbar-track {
-            background: #161b22;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: #30363d;
+        .task-state {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
             border-radius: 4px;
         }
         
-        ::-webkit-scrollbar-thumb:hover {
-            background: #484f58;
+        .task-state.submitted { background: rgba(139, 148, 158, 0.2); color: var(--text-secondary); }
+        .task-state.working { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        .task-state.completed { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
+        .task-state.failed { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+        
+        .task-id {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: monospace;
         }
         
-        .refresh-indicator {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #238636;
-            margin-left: 0.5rem;
+        .task-input {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin: 0.5rem 0;
+            max-height: 60px;
+            overflow: hidden;
         }
         
-        .refresh-indicator.polling {
-            animation: blink 1s infinite;
+        .task-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
         }
         
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
+        /* Sidebar */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
         }
+        
+        .sidebar-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+        
+        .sidebar-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.75rem;
+        }
+        
+        .activity-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.8rem;
+        }
+        
+        .activity-item:last-child { border-bottom: none; }
+        
+        .activity-icon { font-size: 0.9rem; }
+        .activity-text { color: var(--text-secondary); flex: 1; }
+        .activity-time { color: var(--text-muted); font-size: 0.7rem; }
+        
+        /* System Health */
+        .health-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+        }
+        
+        .health-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+        
+        .health-label { font-size: 0.85rem; color: var(--text-secondary); }
+        
+        .health-value {
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .health-value.healthy { color: var(--accent-green); }
+        .health-value.warning { color: var(--accent-orange); }
+        .health-value.error { color: var(--accent-red); }
+        
+        /* API Keys */
+        .api-key-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .api-key-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+        
+        .api-key-agent { font-weight: 600; }
+        
+        .api-key-value {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            background: rgba(0,0,0,0.3);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+        
+        .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+        
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        .btn.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: white;
+        }
+        
+        /* Animations */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .task-card { animation: slideIn 0.3s ease; }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
     </style>
 </head>
 <body>
     <header>
-        <h1>🦡 A2A Bridge <span style="color: #8b949e; font-weight: normal;">|</span> Agent Communication Monitor</h1>
-        <span class="status">
-            <span class="status-dot" id="status-dot"></span>
-            <span id="status-text">Connecting...</span>
-        </span>
+        <div class="logo">
+            <h1>◈ A2A Bridge</h1>
+            <div class="logo-badges">
+                <span class="badge badge-badger">🦡 Badger-1</span>
+                <span class="badge badge-ratchet">🔧 Ratchet</span>
+            </div>
+        </div>
+        <div class="header-status">
+            <div class="status-indicator">
+                <span class="status-dot" id="status-dot"></span>
+                <span id="status-text">Connecting...</span>
+            </div>
+        </div>
     </header>
     
     <div class="container">
-        <div class="agent-status-bar">
-            <div class="agent-card" id="badger-card">
-                <h3>🦡 Badger-1</h3>
-                <div class="agent-status offline" id="badger-status">
-                    <span class="status-dot disconnected"></span>
-                    <span>Offline</span>
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card messages">
+                <div class="stat-value" id="stat-messages">0</div>
+                <div class="stat-label">Messages Exchanged</div>
+            </div>
+            <div class="stat-card tasks">
+                <div class="stat-value" id="stat-tasks">0</div>
+                <div class="stat-label">Active Tasks</div>
+            </div>
+            <div class="stat-card agents">
+                <div class="stat-value" id="stat-agents">2</div>
+                <div class="stat-label">Connected Agents</div>
+            </div>
+            <div class="stat-card system">
+                <div class="stat-value" id="stat-uptime">-</div>
+                <div class="stat-label">System Uptime</div>
+            </div>
+        </div>
+        
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" data-tab="overview">Overview</button>
+            <button class="tab" data-tab="messages">Messages</button>
+            <button class="tab" data-tab="tasks">Tasks</button>
+            <button class="tab" data-tab="agents">Agent Cards</button>
+            <button class="tab" data-tab="system">System</button>
+        </div>
+        
+        <!-- Overview Tab -->
+        <div class="tab-content active" id="overview">
+            <div class="agent-grid">
+                <div class="agent-card badger">
+                    <div class="card-title">🦡 Badger-1</div>
+                    <div class="agent-header">
+                        <div class="agent-avatar">🦡</div>
+                        <div class="agent-info">
+                            <h3>Badger-1</h3>
+                            <span class="agent-status" id="badger-status">
+                                <span class="status-dot"></span>
+                                Connecting
+                            </span>
+                        </div>
+                    </div>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <div class="agent-stat-value" id="badger-messages">0</div>
+                            <div class="agent-stat-label">Messages</div>
+                        </div>
+                        <div class="agent-stat">
+                            <div class="agent-stat-value" id="badger-tasks">0</div>
+                            <div class="agent-stat-label">Tasks</div>
+                        </div>
+                        <div class="agent-stat">
+                            <div class="agent-stat-value" id="badger-webhook">-</div>
+                            <div class="agent-stat-label">Webhook</div>
+                        </div>
+                    </div>
+                    <div class="capabilities" id="badger-capabilities">
+                        <span class="capability">Witness</span>
+                        <span class="capability">Reflection</span>
+                        <span class="capability">Research</span>
+                    </div>
                 </div>
-                <div class="agent-stats">
-                    <div class="agent-stat">
-                        <div class="agent-stat-value" id="badger-total">0</div>
-                        <div class="agent-stat-label">Total</div>
+                
+                <div class="agent-card ratchet">
+                    <div class="card-title">🔧 Ratchet</div>
+                    <div class="agent-header">
+                        <div class="agent-avatar">🔧</div>
+                        <div class="agent-info">
+                            <h3>Ratchet</h3>
+                            <span class="agent-status" id="ratchet-status">
+                                <span class="status-dot"></span>
+                                Connecting
+                            </span>
+                        </div>
                     </div>
-                    <div class="agent-stat">
-                        <div class="agent-stat-value" id="badger-delivered">0</div>
-                        <div class="agent-stat-label">Delivered</div>
+                    <div class="agent-stats">
+                        <div class="agent-stat">
+                            <div class="agent-stat-value" id="ratchet-messages">0</div>
+                            <div class="agent-stat-label">Messages</div>
+                        </div>
+                        <div class="agent-stat">
+                            <div class="agent-stat-value" id="ratchet-tasks">0</div>
+                            <div class="agent-stat-label">Tasks</div>
+                        </div>
+                        <div class="agent-stat">
+                            <div class="agent-stat-value" id="ratchet-webhook">-</div>
+                            <div class="agent-stat-label">Webhook</div>
+                        </div>
                     </div>
-                    <div class="agent-stat">
-                        <div class="agent-stat-value" id="badger-pending">0</div>
-                        <div class="agent-stat-label">Pending</div>
+                    <div class="capabilities" id="ratchet-capabilities">
+                        <span class="capability">Build</span>
+                        <span class="capability">Execute</span>
+                        <span class="capability">Deploy</span>
                     </div>
                 </div>
             </div>
-            <div class="agent-card" id="ratchet-card">
-                <h3>🔧 Ratchet</h3>
-                <div class="agent-status offline" id="ratchet-status">
-                    <span class="status-dot disconnected"></span>
-                    <span>Offline</span>
-                </div>
-                <div class="agent-stats">
-                    <div class="agent-stat">
-                        <div class="agent-stat-value" id="ratchet-total">0</div>
-                        <div class="agent-stat-label">Total</div>
-                    </div>
-                    <div class="agent-stat">
-                        <div class="agent-stat-value" id="ratchet-delivered">0</div>
-                        <div class="agent-stat-label">Delivered</div>
-                    </div>
-                    <div class="agent-stat">
-                        <div class="agent-stat-value" id="ratchet-pending">0</div>
-                        <div class="agent-stat-label">Pending</div>
+            
+            <div class="card">
+                <div class="card-title">📡 Recent Activity</div>
+                <div id="activity-feed">
+                    <div class="empty-state">
+                        <div class="empty-icon">📡</div>
+                        <p>Waiting for activity...</p>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-value" id="total-messages">0</div>
-                <div class="stat-label">Total Messages</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="delivered-count">0</div>
-                <div class="stat-label">Delivered</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="notified-count">0</div>
-                <div class="stat-label">Notified (Pending)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="last-activity">-</div>
-                <div class="stat-label">Last Activity</div>
+        <!-- Messages Tab -->
+        <div class="tab-content" id="messages">
+            <div class="messages-wrapper">
+                <div class="messages-list" id="messages-container">
+                    <div class="empty-state">
+                        <div class="empty-icon">💬</div>
+                        <p>No messages yet</p>
+                    </div>
+                </div>
+                <div class="sidebar">
+                    <div class="sidebar-card">
+                        <div class="sidebar-title">Filter</div>
+                        <div class="controls" style="flex-direction: column;">
+                            <button class="btn active" onclick="filterMessages('all')">All</button>
+                            <button class="btn" onclick="filterMessages('badger-1')">🦡 Badger</button>
+                            <button class="btn" onclick="filterMessages('ratchet')">🔧 Ratchet</button>
+                        </div>
+                    </div>
+                    <div class="sidebar-card">
+                        <div class="sidebar-title">Message Stats</div>
+                        <div class="health-grid">
+                            <div class="health-item">
+                                <span class="health-label">Sent</span>
+                                <span class="health-value" id="msg-sent">0</span>
+                            </div>
+                            <div class="health-item">
+                                <span class="health-label">Delivered</span>
+                                <span class="health-value healthy" id="msg-delivered">0</span>
+                            </div>
+                            <div class="health-item">
+                                <span class="health-label">Pending</span>
+                                <span class="health-value warning" id="msg-pending">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         
-        <div class="controls">
-            <button class="filter-btn active" onclick="filterMessages('all')">All Messages</button>
-            <button class="filter-btn" onclick="filterMessages('badger-1')">🦡 Badger-1</button>
-            <button class="filter-btn" onclick="filterMessages('ratchet')">🔧 Ratchet</button>
-            <button class="filter-btn" onclick="filterMessages('pending')">⏳ Pending</button>
-            <button class="filter-btn" onclick="filterMessages('delivered')">✓ Delivered</button>
-            <button class="filter-btn" onclick="filterMessages('collaborate')">[collaborate]</button>
-            <button class="filter-btn" onclick="filterMessages('build')">[build]</button>
-            <button class="filter-btn" onclick="clearMessages()">Clear</button>
-            <span style="margin-left: auto; color: #8b949e; font-size: 0.875rem;">
-                Auto-refresh: <span id="refresh-indicator" class="refresh-indicator polling"></span>
-            </span>
+        <!-- Tasks Tab -->
+        <div class="tab-content" id="tasks">
+            <div class="controls">
+                <button class="btn active" onclick="filterTasks('all')">All</button>
+                <button class="btn" onclick="filterTasks('submitted')">Submitted</button>
+                <button class="btn" onclick="filterTasks('working')">Working</button>
+                <button class="btn" onclick="filterTasks('completed')">Completed</button>
+                <button class="btn" onclick="filterTasks('failed')">Failed</button>
+            </div>
+            <div class="tasks-grid" id="tasks-container">
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <p>No tasks</p>
+                </div>
+            </div>
         </div>
         
-        <div class="messages-container" id="messages">
-            <div class="empty-state">
-                <div class="empty-state-icon">📡</div>
-                <p>Waiting for messages...</p>
-                <p style="font-size: 0.875rem; margin-top: 0.5rem;">Connect to WebSocket to see real-time communication</p>
+        <!-- Agents Tab -->
+        <div class="tab-content" id="agents">
+            <div class="card">
+                <div class="card-title">🎴 Agent Cards</div>
+                <div id="agent-cards-container">
+                    <div class="empty-state">
+                        <div class="empty-icon">🎴</div>
+                        <p>Loading agent cards...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- System Tab -->
+        <div class="tab-content" id="system">
+            <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="stat-card system">
+                    <div class="stat-value" id="sys-redis">-</div>
+                    <div class="stat-label">Redis Status</div>
+                </div>
+                <div class="stat-card system">
+                    <div class="stat-value" id="sys-ws">-</div>
+                    <div class="stat-label">WebSocket</div>
+                </div>
+                <div class="stat-card system">
+                    <div class="stat-value" id="sys-webhooks">0</div>
+                    <div class="stat-label">Webhooks</div>
+                </div>
+                <div class="stat-card system">
+                    <div class="stat-value" id="sys-apikeys">0</div>
+                    <div class="stat-label">API Keys</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">🔑 API Keys</div>
+                <div class="api-key-list" id="api-keys-list">
+                    <div class="empty-state">Loading...</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">🪝 Registered Webhooks</div>
+                <div class="api-key-list" id="webhooks-list">
+                    <div class="empty-state">Loading...</div>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Configuration
-        const API_URL = window.location.hostname === 'localhost' 
-            ? 'http://localhost:3000' 
-            : 'https://a2a-api.bradarr.com';
-        
-        const WS_URL = API_URL.replace('http://', 'ws://').replace('https://', 'wss://') + '?agentId=observer';
-        
-        // State
+        const API_URL = 'https://a2a-api.bradarr.com';
         let messages = [];
-        let currentFilter = 'all';
-        let ws = null;
-        let reconnectInterval = null;
-        const deliveryStatus = new Map();
-        const agentStats = new Map();
+        let tasks = [];
+        let health = {};
+        let currentMessageFilter = 'all';
+        let currentTaskFilter = 'all';
         
-        // Connect WebSocket
-        function connectWebSocket() {
-            ws = new WebSocket(WS_URL);
-            
-            ws.onopen = () => {
-                console.log('WebSocket connected');
-                updateStatus(true);
-                clearInterval(reconnectInterval);
-                
-                ws.send(JSON.stringify({
-                    type: 'subscribe',
-                    channel: 'all'
-                }));
-            };
-            
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'message') {
-                    addMessage(data);
-                }
-            };
-            
-            ws.onclose = () => {
-                console.log('WebSocket disconnected');
-                updateStatus(false);
-                reconnectInterval = setInterval(connectWebSocket, 5000);
-            };
-            
-            ws.onerror = (err) => {
-                console.error('WebSocket error:', err);
-                updateStatus(false);
-            };
-        }
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
         
-        // Fetch agent status
-        async function fetchAgentStatus(agentId) {
+        // Fetch health
+        async function fetchHealth() {
             try {
-                const response = await fetch(`${API_URL}/agents/${agentId}/status`);
-                if (response.ok) {
-                    const data = await response.json();
-                    agentStats.set(agentId, data);
-                    updateAgentCard(agentId, data);
-                    return data;
-                }
-            } catch (err) {
-                console.error(`Error fetching ${agentId} status:`, err);
+                const res = await fetch(`${API_URL}/health`);
+                health = await res.json();
+                updateHealthDisplay();
+            } catch (e) {
+                console.error('Health fetch failed:', e);
             }
-            return null;
         }
         
-        // Update agent card UI
-        function updateAgentCard(agentId, data) {
-            const isBadger = agentId === 'badger-1';
-            const prefix = isBadger ? 'badger' : 'ratchet';
+        function updateHealthDisplay() {
+            document.getElementById('status-dot').classList.toggle('error', health.status !== 'healthy');
+            document.getElementById('status-text').textContent = health.status === 'healthy' ? 'Connected' : 'Error';
             
-            const statusEl = document.getElementById(`${prefix}-status`);
-            const dot = statusEl.querySelector('.status-dot');
-            const text = statusEl.querySelector('span:last-child');
+            document.getElementById('sys-redis').textContent = health.redis === 'connected' ? '✓' : '✗';
+            document.getElementById('sys-redis').className = 'stat-value ' + (health.redis === 'connected' ? 'healthy' : 'error');
             
-            if (data.status === 'online') {
-                statusEl.classList.remove('offline');
-                statusEl.classList.add('online');
-                dot.classList.remove('disconnected');
-                text.textContent = 'Online (WebSocket)';
-            } else if (data.webhook?.registered) {
-                statusEl.classList.remove('online');
-                statusEl.classList.add('offline');
-                dot.classList.remove('disconnected');
-                dot.style.background = '#d29922';
-                text.textContent = 'Webhook Only';
-            } else {
-                statusEl.classList.remove('online');
-                statusEl.classList.add('offline');
-                dot.classList.add('disconnected');
-                text.textContent = 'Offline';
-            }
+            document.getElementById('sys-ws').textContent = health.websocket === 'enabled' ? '✓' : '✗';
+            document.getElementById('sys-ws').className = 'stat-value ' + (health.websocket === 'enabled' ? 'healthy' : 'error');
             
-            document.getElementById(`${prefix}-total`).textContent = data.messages?.total || 0;
-            document.getElementById(`${prefix}-delivered`).textContent = data.messages?.delivered || 0;
-            document.getElementById(`${prefix}-pending`).textContent = data.messages?.undelivered || 0;
+            document.getElementById('sys-webhooks').textContent = health.registeredWebhooks || 0;
+            document.getElementById('sys-apikeys').textContent = health.apiKeys || 0;
+            
+            document.getElementById('stat-messages').textContent = (health.messages?.total || 0);
+            document.getElementById('stat-tasks').textContent = (health.tasks?.active || 0);
         }
         
-        // Fallback: HTTP polling
-        async function pollMessages() {
+        // Fetch messages
+        async function fetchMessages() {
             try {
-                const response = await fetch(`${API_URL}/messages/all?limit=100`);
-                const data = await response.json();
-                
-                if (data.messages) {
-                    const existingIds = new Set(messages.map(m => m.messageId));
-                    const newMessages = data.messages.filter(m => !existingIds.has(m.messageId));
-                    
-                    newMessages.forEach(addMessage);
-                    
-                    // Fetch delivery statuses
-                    await Promise.all(data.messages.map(m => fetchDeliveryStatus(m.messageId)));
-                    renderMessages();
-                }
-                
-                // Update agent statuses
-                await Promise.all([
-                    fetchAgentStatus('badger-1'),
-                    fetchAgentStatus('ratchet')
-                ]);
-                
-                updateStatus(true);
-            } catch (err) {
-                console.error('Polling error:', err);
-                updateStatus(false);
+                const res = await fetch(`${API_URL}/messages/all?limit=50`);
+                const data = await res.json();
+                messages = data.messages || [];
+                renderMessages();
+                updateMessageStats();
+            } catch (e) {
+                console.error('Messages fetch failed:', e);
             }
         }
         
-        // Add message to display
-        function addMessage(message) {
-            if (messages.some(m => m.messageId === message.messageId)) {
-                return;
-            }
-            
-            messages.unshift(message);
-            messages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            
-            renderMessages();
-            updateStats();
-        }
-        
-        // Fetch delivery status
-        async function fetchDeliveryStatus(messageId) {
-            try {
-                const response = await fetch(`${API_URL}/messages/${messageId}/status`);
-                if (response.ok) {
-                    const data = await response.json();
-                    deliveryStatus.set(messageId, data);
-                    return data;
-                }
-            } catch (err) {
-                console.error('Error fetching delivery status:', err);
-            }
-            return null;
-        }
-        
-        // Get status display for message
-        function getStatusDisplay(messageId, to) {
-            const status = deliveryStatus.get(messageId);
-            if (!status) {
-                return { class: 'pending', icon: '○', text: 'Pending', notified: false };
-            }
-            
-            const receipt = status.receipts?.[to];
-            const notification = status.notifications?.[to];
-            
-            if (receipt?.status === 'read') {
-                return { class: 'read', icon: '✓✓', text: 'Read', notified: true, timestamp: receipt.timestamp };
-            }
-            if (receipt?.status === 'delivered') {
-                return { class: 'delivered', icon: '✓', text: 'Delivered', notified: true, timestamp: receipt.timestamp };
-            }
-            if (notification?.notified) {
-                return { class: 'notified', icon: '⭘', text: 'Notified', notified: true, timestamp: notification.timestamp };
-            }
-            return { class: 'pending', icon: '○', text: 'Pending', notified: false };
-        }
-        
-        // Render messages
         function renderMessages() {
-            const container = document.getElementById('messages');
-            
+            const container = document.getElementById('messages-container');
             const filtered = messages.filter(m => {
-                if (currentFilter === 'all') return true;
-                if (currentFilter === 'badger-1') return m.from === 'badger-1';
-                if (currentFilter === 'ratchet') return m.from === 'ratchet';
-                if (currentFilter === 'pending') {
-                    const status = getStatusDisplay(m.messageId, m.to);
-                    return !status.notified;
-                }
-                if (currentFilter === 'delivered') {
-                    const status = getStatusDisplay(m.messageId, m.to);
-                    return status.class === 'delivered' || status.class === 'read';
-                }
-                if (currentFilter === 'collaborate') return m.content?.text?.includes('[collaborate]');
-                if (currentFilter === 'build') return m.content?.text?.includes('[build]');
-                return true;
+                if (currentMessageFilter === 'all') return true;
+                return m.from === currentMessageFilter;
             });
             
             if (filtered.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <p>No messages${currentFilter !== 'all' ? ' matching filter' : ''}</p>
-                    </div>
-                `;
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div><p>No messages</p></div>';
                 return;
             }
             
-            container.innerHTML = filtered.map(m => renderMessage(m)).join('');
-        }
-        
-        // Render single message
-        function renderMessage(m) {
-            const avatar = m.from === 'badger-1' ? '🦡' : '🔧';
-            const avatarClass = m.from === 'badger-1' ? 'badger-1' : 'ratchet';
-            const time = new Date(m.timestamp).toLocaleString();
-            
-            // Detect mode tags
-            let modeClass = '';
-            if (m.content?.text?.includes('[collaborate]')) modeClass = 'collaborate';
-            else if (m.content?.text?.includes('[build]')) modeClass = 'build';
-            else if (m.content?.text?.includes('[witness]')) modeClass = 'witness';
-            
-            const modeTag = modeClass ? `<span class="message-type ${modeClass}">${modeClass}</span>` : '';
-            
-            // Get delivery status
-            const status = getStatusDisplay(m.messageId, m.to);
-            
-            // Build timeline
-            const statusData = deliveryStatus.get(m.messageId);
-            const notification = statusData?.notifications?.[m.to];
-            const receipt = statusData?.receipts?.[m.to];
-            
-            let timeline = '<div class="timeline">';
-            timeline += `<span class="timeline-dot sent" title="Sent: ${new Date(m.timestamp).toLocaleTimeString()}"></span>Sent`;
-            if (notification) {
-                timeline += `<span>→</span><span class="timeline-dot notified" title="Notified: ${new Date(notification.timestamp).toLocaleTimeString()}"></span>Notified`;
-            }
-            if (receipt?.status === 'delivered' || receipt?.status === 'read') {
-                timeline += `<span>→</span><span class="timeline-dot ${receipt.status}" title="${receipt.status}: ${new Date(receipt.timestamp).toLocaleTimeString()}"></span>${receipt.status}`;
-            }
-            timeline += '</div>';
-            
-            return `
-                <div class="message" data-id="${m.messageId}">
-                    <div class="message-avatar ${avatarClass}">${avatar}</div>
-                    <div class="message-content">
-                        <div class="message-header">
-                            <span class="message-author">${m.from}</span>
-                            <span class="message-time">${time}</span>
-                            ${modeTag}
-                            <span class="message-type">${m.type}</span>
-                            <span class="delivery-status ${status.class}" title="To: ${m.to}">
-                                ${status.icon} ${status.text}
-                            </span>
+            container.innerHTML = filtered.map(m => `
+                <div class="message">
+                    <div class="message-header">
+                        <div class="message-avatar ${m.from === 'badger-1' ? 'badger' : 'ratchet'}">
+                            ${m.from === 'badger-1' ? '🦡' : '🔧'}
                         </div>
-                        <div class="message-body">${escapeHtml(m.content?.text || '')}</div>
-                        <div class="message-meta">
-                            <span>To: ${m.to}</span>
-                            <span>ID: ${m.messageId?.slice(0, 8)}...</span>
-                            ${timeline}
-                        </div>
+                        <span class="message-author">${m.from}</span>
+                        <span class="message-time">${new Date(m.timestamp).toLocaleTimeString()}</span>
+                    </div>
+                    <div class="message-body">${escapeHtml(m.content?.text || '').slice(0, 200)}</div>
+                    <div class="message-meta">
+                        <span>To: ${m.to}</span>
+                        <span class="message-status status-delivered">✓ Delivered</span>
                     </div>
                 </div>
-            `;
+            `).join('');
         }
         
-        // Update stats
-        function updateStats() {
-            document.getElementById('total-messages').textContent = messages.length;
+        function updateMessageStats() {
+            document.getElementById('msg-sent').textContent = messages.length;
+            document.getElementById('msg-delivered').textContent = messages.length;
+            document.getElementById('msg-pending').textContent = '0';
             
-            let delivered = 0;
-            let notified = 0;
-            
-            messages.forEach(m => {
-                const status = getStatusDisplay(m.messageId, m.to);
-                if (status.class === 'delivered' || status.class === 'read') delivered++;
-                if (status.notified) notified++;
-            });
-            
-            document.getElementById('delivered-count').textContent = delivered;
-            document.getElementById('notified-count').textContent = notified;
-            
-            const lastMsg = messages[0];
-            document.getElementById('last-activity').textContent = lastMsg 
-                ? new Date(lastMsg.timestamp).toLocaleTimeString() 
-                : '-';
+            // Per-agent stats
+            const badgerMsgs = messages.filter(m => m.from === 'badger-1').length;
+            const ratchetMsgs = messages.filter(m => m.from === 'ratchet').length;
+            document.getElementById('badger-messages').textContent = badgerMsgs;
+            document.getElementById('ratchet-messages').textContent = ratchetMsgs;
         }
         
-        // Update connection status
-        function updateStatus(connected) {
-            const dot = document.getElementById('status-dot');
-            const text = document.getElementById('status-text');
-            
-            if (connected) {
-                dot.classList.remove('disconnected');
-                text.textContent = 'Live';
-            } else {
-                dot.classList.add('disconnected');
-                text.textContent = 'Reconnecting...';
+        function filterMessages(filter) {
+            currentMessageFilter = filter;
+            renderMessages();
+            document.querySelectorAll('#messages .btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+        
+        // Fetch tasks
+        async function fetchTasks() {
+            try {
+                const res = await fetch(`${API_URL}/tasks?limit=50`);
+                const data = await res.json();
+                tasks = data.tasks || [];
+                renderTasks();
+            } catch (e) {
+                console.error('Tasks fetch failed:', e);
             }
         }
         
-        // Filter messages
-        function filterMessages(filter) {
-            currentFilter = filter;
-            
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.remove('active');
+        function renderTasks() {
+            const container = document.getElementById('tasks-container');
+            const filtered = tasks.filter(t => {
+                if (currentTaskFilter === 'all') return true;
+                return t.status?.state === currentTaskFilter;
             });
-            event.target.classList.add('active');
             
-            renderMessages();
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No tasks</p></div>';
+                return;
+            }
+            
+            container.innerHTML = filtered.map(t => `
+                <div class="task-card ${t.status?.state || 'submitted'}">
+                    <div class="task-header">
+                        <span class="task-type">${t.type || 'action'}</span>
+                        <span class="task-state ${t.status?.state}">${t.status?.state || 'submitted'}</span>
+                    </div>
+                    <div class="task-id">${t.id?.slice(0, 12)}...</div>
+                    <div class="task-input">${escapeHtml(JSON.stringify(t.input || {}).slice(0, 100))}</div>
+                    <div class="task-meta">
+                        <span>From: ${t.createdBy}</span>
+                        <span>To: ${t.agentId}</span>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('badger-tasks').textContent = tasks.filter(t => t.agentId === 'badger-1').length;
+            document.getElementById('ratchet-tasks').textContent = tasks.filter(t => t.agentId === 'ratchet').length;
         }
         
-        // Clear messages
-        function clearMessages() {
-            messages = [];
-            renderMessages();
-            updateStats();
+        function filterTasks(filter) {
+            currentTaskFilter = filter;
+            renderTasks();
+            document.querySelectorAll('#tasks .btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
         }
         
-        // Escape HTML
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+        // Fetch agent cards
+        async function fetchAgentCards() {
+            try {
+                const res = await fetch(`${API_URL}/agents/cards`);
+                const data = await res.json();
+                renderAgentCards(data.agents || []);
+            } catch (e) {
+                console.error('Agent cards fetch failed:', e);
+            }
         }
         
-        // Initialize
-        function init() {
-            connectWebSocket();
-            setInterval(pollMessages, 2000);
-            pollMessages();
+        function renderAgentCards(agents) {
+            const container = document.getElementById('agent-cards-container');
+            container.innerHTML = agents.map(a => `
+                <div class="agent-card ${a.agentId === 'badger-1' ? 'badger' : 'ratchet'}">
+                    <div class="card-title">${a.agentId === 'badger-1' ? '🦡' : '🔧'} ${a.agentId}</div>
+                    <div style="margin-bottom: 1rem;">
+                        <strong>Name:</strong> ${a.name || a.agentId}<br>
+                        <strong>Version:</strong> ${a.version || '1.0'}
+                    </div>
+                    <div class="capabilities">
+                        ${(a.capabilities || []).map(c => `<span class="capability">${c}</span>`).join('')}
+                    </div>
+                </div>
+            `).join('');
         }
         
-        // Start
+        // Fetch webhooks
+        async function fetchWebhooks() {
+            try {
+                const [badger, ratchet] = await Promise.all([
+                    fetch(`${API_URL}/webhooks/badger-1`).then(r => r.json()).catch(() => null),
+                    fetch(`${API_URL}/webhooks/ratchet`).then(r => r.json()).catch(() => null)
+                ]);
+                
+                const list = document.getElementById('webhooks-list');
+                const webhooks = [];
+                if (badger) webhooks.push(badger);
+                if (ratchet) webhooks.push(ratchet);
+                
+                if (webhooks.length === 0) {
+                    list.innerHTML = '<div class="empty-state">No webhooks</div>';
+                    return;
+                }
+                
+                list.innerHTML = webhooks.map(w => `
+                    <div class="api-key-item">
+                        <span class="api-key-agent">${w.agentId}</span>
+                        <span class="health-value ${w.webhookUrl ? 'healthy' : 'error'}">
+                            ${w.webhookUrl ? '✓ Registered' : '✗ Missing'}
+                        </span>
+                    </div>
+                `).join('');
+                
+                document.getElementById('badger-webhook').textContent = badger?.webhookUrl ? '✓' : '✗';
+                document.getElementById('ratchet-webhook').textContent = ratchet?.webhookUrl ? '✓' : '✗';
+                
+                // Update agent statuses
+                document.getElementById('badger-status').className = 'agent-status ' + (badger?.webhookUrl ? 'webhook' : 'offline');
+                document.getElementById('ratchet-status').className = 'agent-status ' + (ratchet?.webhookUrl ? 'webhook' : 'offline');
+            } catch (e) {
+                console.error('Webhooks fetch failed:', e);
+            }
+        }
+        
+        // Utility
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        
+        // Activity feed
+        function updateActivityFeed() {
+            const container = document.getElementById('activity-feed');
+            const activities = [];
+            
+            messages.slice(0, 5).forEach(m => {
+                activities.push({
+                    icon: m.from === 'badger-1' ? '🦡' : '🔧',
+                    text: `${m.from} → ${m.to}`,
+                    time: new Date(m.timestamp).toLocaleTimeString()
+                });
+            });
+            
+            if (activities.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">📡</div><p>Waiting for activity...</p></div>';
+                return;
+            }
+            
+            container.innerHTML = activities.map(a => `
+                <div class="activity-item">
+                    <span class="activity-icon">${a.icon}</span>
+                    <span class="activity-text">${a.text}</span>
+                    <span class="activity-time">${a.time}</span>
+                </div>
+            `).join('');
+        }
+        
+        // Init
+        async function init() {
+            await fetchHealth();
+            await fetchMessages();
+            await fetchTasks();
+            await fetchAgentCards();
+            await fetchWebhooks();
+            updateActivityFeed();
+            
+            // Refresh every 10 seconds
+            setInterval(async () => {
+                await fetchMessages();
+                await fetchTasks();
+                updateActivityFeed();
+            }, 10000);
+        }
+        
         init();
     </script>
 </body>
