@@ -65,7 +65,7 @@ async function loadWebhooks() {
   
   console.log('Loaded webhooks:', Array.from(agentWebhooks.keys()));
 }
-loadWebhooks();
+await loadWebhooks();
 
 // Push notification function
 async function pushNotification(agentId, message) {
@@ -101,7 +101,7 @@ async function pushNotification(agentId, message) {
     }, { headers, timeout: 10000 });
     
     console.log(`Push notification sent to ${agentId} via webhook`);
-    return { notified: true, method: 'webhook', status: 'pending_confirmation' };
+    return { delivered: true, method: 'webhook', status: 'pending_confirmation' };
   } catch (err) {
     console.error(`Push notification error for ${agentId}:`, err.response?.status || err.message);
     return { delivered: false, reason: 'webhook_failed', status: err.response?.status, error: err.message };
