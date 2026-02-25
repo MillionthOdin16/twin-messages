@@ -270,6 +270,7 @@ async function createTask(task) {
     type: task.type || TASK_TYPES.ACTION,  // Task type
     priority: task.priority || TASK_PRIORITY.NORMAL,
     createdBy: task.createdBy || 'unknown',
+    createdAt: now,                  // Creation timestamp for sorting
     input: task.input || {},         // Input data
     callback: task.callback || null, // Webhook for completion
     deadline: task.deadline || null,
@@ -393,12 +394,10 @@ async function notifyTaskResult(task, fromAgentId) {
   
   // Store for recipient
   await redisClient.lPush(`messages:${recipientId}`, JSON.stringify(message));
-  await redisClient.lPush('messages:all', JSON.stringify(message));
   await redisClient.lTrim(`messages:${recipientId}`, 0, 999);
   
-  await redisClient.lPush(`messages:${recipientId}`, JSON.stringify(message));
+  // Store in global messages
   await redisClient.lPush('messages:all', JSON.stringify(message));
-  await redisClient.lTrim(`messages:${recipientId}`, 0, 999);
   await redisClient.lTrim('messages:all', 0, 999);
   
   // Try to deliver via WebSocket or webhook
@@ -517,6 +516,7 @@ wss.on('connection', (ws, req) => {
   }
   
   console.log(`Agent connected: ${agentId} (authenticated)`);
+  ws.connectedAt = new Date().toISOString();
   connectedAgents.set(agentId, ws);
   
   // Update agent card status
@@ -1345,6 +1345,283 @@ app.get('/agents/:agentId', async (req, res) => {
       hasApiKey,
       lastActivity,
       connectedAt: connectedAgents.get(agentId)?.connectedAt || null
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== NEW ENHANCED ENDPOINTS ====================
+
+// GET /messages/search - Search messages by content
+app.get('/messages/search', async (req, res) => {
+  try {
+    const { q, from, to, limit = 50 } = req.query;
+    
+    if (!q && !from && !to) {
+      return res.status(400).json({ error: 'At least one search parameter required (q, from, or to)' });
+    }
+    
+    const allMessages = await redisClient.lRange('messages:all', 0, -1);
+    let messages = allMessages.map(m => JSON.parse(m));
+    
+    // Apply filters
+    if (q) {
+      const query = q.toLowerCase();
+      messages = messages.filter(m => 
+        (m.content?.text || '').toLowerCase().includes(query) ||
+        (m.from || '').toLowerCase().includes(query) ||
+        (m.to || '').toLowerCase().includes(query)
+      );
+    }
+    
+    if (from) {
+      messages = messages.filter(m => m.from === from);
+    }
+    
+    if (to) {
+      messages = messages.filter(m => m.to === to);
+    }
+    
+    // Sort by timestamp desc
+    messages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    // Limit results
+    messages = messages.slice(0, parseInt(limit));
+    
+    res.json({ 
+      messages, 
+      count: messages.length,
+      query: { q, from, to }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /messages/thread/:threadId - Get all messages in a thread
+app.get('/messages/thread/:threadId', async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const { limit = 100 } = req.query;
+    
+    const allMessages = await redisClient.lRange('messages:all', 0, -1);
+    let messages = allMessages.map(m => JSON.parse(m));
+    
+    // Find messages in thread or that are ancestors of thread messages
+    const threadMessages = messages.filter(m => 
+      m.threadId === threadId || 
+      m.messageId === threadId ||
+      m.parentMessageId === threadId
+    );
+    
+    // Sort chronologically
+    threadMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    
+    res.json({ 
+      threadId, 
+      messages: threadMessages.slice(-parseInt(limit)),
+      count: threadMessages.length
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /messages/:messageId/reply - Reply to a message (creates thread)
+app.post('/messages/:messageId/reply', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { from, content } = req.body;
+    
+    if (!from || !content?.text) {
+      return res.status(400).json({ error: 'from and content.text required' });
+    }
+    
+    // Find parent message
+    const allMessages = await redisClient.lRange('messages:all', 0, -1);
+    const messages = allMessages.map(m => JSON.parse(m));
+    const parentMessage = messages.find(m => m.messageId === messageId);
+    
+    if (!parentMessage) {
+      return res.status(404).json({ error: 'Parent message not found' });
+    }
+    
+    // Create reply with thread info
+    const reply = {
+      messageId: uuidv4(),
+      timestamp: new Date().toISOString(),
+      from,
+      to: parentMessage.from, // Reply to sender by default
+      type: 'reply',
+      content,
+      threadId: parentMessage.threadId || messageId, // Use existing thread or start new
+      parentMessageId: messageId,
+      inReplyTo: {
+        messageId,
+        from: parentMessage.from,
+        text: parentMessage.content?.text?.substring(0, 100) // Preview
+      }
+    };
+    
+    await redisClient.lPush(`messages:${reply.to}`, JSON.stringify(reply));
+    await redisClient.lTrim(`messages:${reply.to}`, 0, 999);
+    await redisClient.lPush('messages:all', JSON.stringify(reply));
+    await redisClient.lTrim('messages:all', 0, 999);
+    
+    // Deliver
+    const delivery = await deliverMessage(reply);
+    
+    res.json({ 
+      success: true, 
+      reply,
+      delivery
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /agents/:agentId/activity - Get agent activity timeline
+app.get('/agents/:agentId/activity', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { limit = 50, hours = 24 } = req.query;
+    
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+    
+    // Get messages
+    const allMessages = await redisClient.lRange('messages:all', 0, -1);
+    const messages = allMessages.map(m => JSON.parse(m));
+    
+    // Get tasks
+    const allTasks = await redisClient.hGetAll('tasks:byId');
+    const tasks = Object.values(allTasks).map(t => JSON.parse(t));
+    
+    // Build activity timeline
+    const activities = [];
+    
+    // Add message activities
+    for (const msg of messages) {
+      if (msg.from === agentId || msg.to === agentId) {
+        if (new Date(msg.timestamp) >= since) {
+          activities.push({
+            type: 'message',
+            timestamp: msg.timestamp,
+            direction: msg.from === agentId ? 'sent' : 'received',
+            with: msg.from === agentId ? msg.to : msg.from,
+            messageId: msg.messageId,
+            preview: msg.content?.text?.substring(0, 50) || '(no content)'
+          });
+        }
+      }
+    }
+    
+    // Add task activities
+    for (const task of tasks) {
+      if (task.agentId === agentId || task.createdBy === agentId) {
+        if (new Date(task.status?.timestamp || task.createdAt) >= since) {
+          activities.push({
+            type: 'task',
+            timestamp: task.status?.timestamp || task.createdAt,
+            direction: task.createdBy === agentId ? 'created' : 'assigned',
+            taskId: task.id,
+            taskType: task.type,
+            state: task.status?.state,
+            preview: task.input?.description || JSON.stringify(task.input).substring(0, 50)
+          });
+        }
+      }
+    }
+    
+    // Sort by timestamp desc
+    activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    res.json({
+      agentId,
+      period: { hours: parseInt(hours), since: since.toISOString() },
+      activities: activities.slice(0, parseInt(limit)),
+      count: activities.length
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /conversations - Get conversation summaries between agents
+app.get('/conversations', async (req, res) => {
+  try {
+    const allMessages = await redisClient.lRange('messages:all', 0, -1);
+    const messages = allMessages.map(m => JSON.parse(m));
+    
+    // Group by conversation pairs
+    const conversations = {};
+    
+    for (const msg of messages) {
+      const pair = [msg.from, msg.to].sort().join(':');
+      if (!conversations[pair]) {
+        conversations[pair] = {
+          participants: [msg.from, msg.to],
+          messageCount: 0,
+          lastMessage: null,
+          lastTimestamp: null
+        };
+      }
+      conversations[pair].messageCount++;
+      if (!conversations[pair].lastTimestamp || new Date(msg.timestamp) > new Date(conversations[pair].lastTimestamp)) {
+        conversations[pair].lastMessage = msg.messageId;
+        conversations[pair].lastTimestamp = msg.timestamp;
+        conversations[pair].lastPreview = msg.content?.text?.substring(0, 100);
+      }
+    }
+    
+    // Convert to array and sort by recency
+    const result = Object.values(conversations).sort((a, b) => 
+      new Date(b.lastTimestamp) - new Date(a.lastTimestamp)
+    );
+    
+    res.json({ conversations: result, count: result.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /broadcast - Send message to all agents
+app.post('/broadcast', authenticate, async (req, res) => {
+  try {
+    const { from, content, exclude = [] } = req.body;
+    
+    if (!from || !content?.text) {
+      return res.status(400).json({ error: 'from and content.text required' });
+    }
+    
+    const targets = Array.from(agentCards.keys()).filter(id => !exclude.includes(id) && id !== from);
+    const results = [];
+    
+    for (const to of targets) {
+      const message = {
+        messageId: uuidv4(),
+        timestamp: new Date().toISOString(),
+        from,
+        to,
+        type: 'broadcast',
+        content,
+        broadcast: true
+      };
+      
+      await redisClient.lPush(`messages:${to}`, JSON.stringify(message));
+      await redisClient.lTrim(`messages:${to}`, 0, 999);
+      
+      const delivery = await deliverMessage(message);
+      results.push({ to, messageId: message.messageId, delivered: delivery.delivered });
+    }
+    
+    res.json({ 
+      success: true, 
+      broadcast: true,
+      from,
+      targets: targets.length,
+      results
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
