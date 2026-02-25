@@ -65,7 +65,19 @@ async function loadWebhooks() {
   
   console.log('Loaded webhooks:', Array.from(agentWebhooks.keys()));
 }
-await loadWebhooks();
+
+// Initialize server after Redis connects
+async function init() {
+  await loadWebhooks();
+  
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, () => {
+    console.log(`A2A Bridge V3 (with Push Notifications) running on port ${PORT}`);
+    console.log(`Features: WebSocket + Webhook Push`);
+  });
+}
+
+init().catch(console.error);
 
 // Push notification function
 async function pushNotification(agentId, message) {
@@ -557,8 +569,4 @@ app.get('/health', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`A2A Bridge V3 (with Push Notifications) running on port ${PORT}`);
-  console.log(`Features: WebSocket + Webhook Push`);
-});
+
