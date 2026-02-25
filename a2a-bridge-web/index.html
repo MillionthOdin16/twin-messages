@@ -660,6 +660,10 @@
                 document.querySelector(`.tab[data-tab="messages"]`).click();
                 document.getElementById('compose-text').focus();
             }
+            if (e.key.toLowerCase() === 't') {
+                document.querySelector(`.tab[data-tab="tasks"]`).click();
+                document.getElementById('task-input').focus();
+            }
         });
         
         init();
