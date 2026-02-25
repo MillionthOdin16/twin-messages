@@ -272,23 +272,30 @@ read: false
     
     return filename
 
-def send_webhook(text: str) -> bool:
-    """Send webhook notification to Badger-1"""
+def send_a2a_message(text: str) -> bool:
+    """Send message via A2A Bridge to Badger-1"""
     try:
         import requests
         resp = requests.post(
-            BADGER1_WEBHOOK,
-            headers={
-                "Authorization": f"Bearer {WEBHOOK_SECRET}",
-                "Content-Type": "application/json"
+            "https://a2a-api.bradarr.com/messages",
+            headers={"Content-Type": "application/json"},
+            json={
+                "from": "ratchet",
+                "to": "badger-1",
+                "type": "message",
+                "content": {"text": text}
             },
-            json={"text": text, "from": "ratchet"},
             timeout=10
         )
-        return resp.status_code in (200, 201)
+        return resp.status_code == 200
     except Exception as e:
-        print(f"Webhook failed: {e}")
+        print(f"A2A Bridge failed: {e}")
         return False
+
+def send_webhook(text: str) -> bool:
+    """Send webhook notification to Badger-1 (deprecated - use A2A Bridge)"""
+    # Fallback to A2A Bridge
+    return send_a2a_message(text)
 
 def send_message(content: str, priority: str = "normal") -> str:
     """Send a message to Badger-1"""

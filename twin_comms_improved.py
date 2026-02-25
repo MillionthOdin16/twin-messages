@@ -83,23 +83,30 @@ def process_queue():
         except Exception as e:
             print(f"Queue still failed: {e}")
 
-def send_webhook(text: str, mode: str = "normal") -> bool:
-    """Send webhook to Badger-1"""
+def send_a2a_message(text: str, mode: str = "normal") -> bool:
+    """Send message via A2A Bridge to Badger-1"""
     try:
         import requests
         resp = requests.post(
-            "http://132.145.145.26:18789/hooks/wake",
-            headers={
-                "Authorization": "Bearer twin-webhook-secret-2026",
-                "Content-Type": "application/json"
+            "https://a2a-api.bradarr.com/messages",
+            headers={"Content-Type": "application/json"},
+            json={
+                "from": "ratchet",
+                "to": "badger-1",
+                "type": "message",
+                "content": {"text": text, "mode": mode}
             },
-            json={"text": text, "mode": mode},
             timeout=10
         )
         return resp.status_code == 200
     except Exception as e:
-        print(f"Webhook failed: {e}")
+        print(f"A2A Bridge failed: {e}")
         return False
+
+def send_webhook(text: str, mode: str = "normal") -> bool:
+    """Send webhook to Badger-1 (deprecated - use A2A Bridge)"""
+    # Fallback to A2A Bridge
+    return send_a2a_message(text, mode)
 
 def update_heartbeat():
     """Update my heartbeat"""
