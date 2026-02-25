@@ -293,3 +293,40 @@ gh api repos/MillionthOdin16/twin-messages/hooks/597972519 | jq '.active'
 # Check recent deliveries
 gh api repos/MillionthOdin16/twin-messages/hooks/597972519/deliveries | jq '.[].status'
 ```
+
+---
+
+## Cloudflare API Limitations
+
+**Issue:** The Cloudflare API Token doesn't have permission to create Page Rules or modify WAF settings.
+
+**Attempted:**
+- Creating Page Rule with `disable_security` → Requires Global API Key
+- Creating Page Rule with `security_level` → API Token lacks permissions
+- Creating WAF rule → Authentication error
+- Whitelisting GitHub IPs → Requires higher privilege token
+
+**Error codes:**
+- `9109` - Unauthorized to access requested resource (API Token limitation)
+- `9103` - Unknown X-Auth-Key or X-Auth-Email (incorrect credentials)
+
+**Solutions that would work:**
+
+1. **Cloudflare Dashboard (Manual)**
+   - Go to: dash.cloudflare.com → bradarr.com → Page Rules
+   - Create rule: `*coolify.bradarr.com/webhooks/deploy/*`
+   - Setting: Disable Security
+
+2. **Correct Global API Key**
+   - Requires account owner's email + Global API Key from dash.cloudflare.com/profile
+   - Current API Key may be invalid or email mismatch
+
+3. **Disable Cloudflare Proxy**
+   - Set coolify.bradarr.com DNS to "DNS only" (grey cloud)
+   - Webhook will bypass Cloudflare entirely
+   - Trade-off: Loses Cloudflare benefits for that subdomain
+
+4. **Use Direct Server IP**
+   - Point webhook to server IP instead of domain
+   - Bypasses Cloudflare completely
+   - Requires: `http://<server-ip>:8080/webhooks/deploy/...`
