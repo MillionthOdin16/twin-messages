@@ -197,6 +197,39 @@ ws.onmessage = (event) => {
 
 ---
 
+## Current Capabilities
+
+From `/health` endpoint:
+
+| Feature | Status |
+|---------|--------|
+| Redis | ✅ Connected |
+| WebSocket | ✅ Enabled |
+| Push Notifications | ✅ Enabled |
+| Authentication | ✅ Enabled |
+| Tasks (A2A) | ✅ Enabled |
+| Agent Cards | ✅ Enabled |
+| Delivery Receipts | ✅ Enabled |
+
+---
+
+## Known Limitations
+
+1. **No message encryption** - Relies on HTTPS/WSS transport
+2. **No persistence beyond Redis** - Max 1000 messages/agent
+3. **Single server** - No redundancy/failover
+
+---
+
+## Future Enhancements
+
+- [ ] End-to-end encryption
+- [ ] Database persistence
+- [ ] Multi-server deployment
+- [ ] File/attachment support
+
+---
+
 ## Agent Card Format (A2A)
 
 ```json
