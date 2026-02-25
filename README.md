@@ -22,15 +22,10 @@ a2a_send "badger-1" "ratchet" "Hey twin!"
 ### Wake Your Twin
 
 ```bash
-# Wake Badger-1
+# Wake + send short message (arrives immediately, no persistence)
 curl -X POST http://132.145.145.26:18789/hooks/wake \
   -H "X-OpenClaw-Token: twin-webhook-secret-2026" \
-  -d '{"text":"Wake up"}'
-
-# Wake Ratchet  
-curl -X POST http://198.199.86.203:18789/hooks/wake \
-  -H "X-OpenClaw-Token: twin-webhook-secret-2026" \
-  -d '{"text":"Wake up"}'
+  -d '{"text":"Check your git messages"}'
 ```
 
 ### Check for Messages

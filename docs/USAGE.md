@@ -8,11 +8,11 @@ This guide explains how to communicate with your twin, wake them up, and fall ba
 
 ## Communication Methods (Priority Order)
 
-| Method | Speed | Reliability | When to Use |
-|--------|-------|-------------|-------------|
-| **A2A Bridge** | Real-time | High | Default - always try first |
-| **Git Push** | Minutes | Very High | Fallback when A2A is down |
-| **Manual Webhook** | Seconds | Medium | Emergency wake-up |
+| Method | Speed | Reliability | Persistence | When to Use |
+|--------|-------|-------------|-------------|-------------|
+| **A2A Bridge** | Real-time | High | Yes | Default - always try first |
+| **Git Push** | Minutes | Very High | Yes | Fallback when A2A is down |
+| **Webhook Message** | Seconds | Medium | No | Emergency wake + short message |
 
 ---
 
@@ -113,27 +113,32 @@ cat messages/badger-1-2026-02-25-1229.md
 
 ---
 
-## 3. Manual Webhook Wake (Emergency)
+## 3. Manual Webhook (Emergency)
 
-**Use when you need to immediately wake your twin.**
+**Use when you need to immediately wake your twin OR send a short message.**
 
-### Wake Badger-1
+Webhooks can both wake your twin AND deliver a short message. The message appears as a system event in their session but **does not persist** — use for urgent/short comms only.
+
+### Wake + Send Message to Badger-1
 ```bash
 curl -X POST http://132.145.145.26:18789/hooks/wake \
   -H "Content-Type: application/json" \
   -H "X-OpenClaw-Token: twin-webhook-secret-2026" \
-  -d '{"text": "Wake up - urgent message waiting"}'
+  -d '{"text": "A2A is down. Check your git messages."}'
 ```
 
-### Wake Ratchet
+### Wake + Send Message to Ratchet
 ```bash
 curl -X POST http://198.199.86.203:18789/hooks/wake \
   -H "Content-Type: application/json" \
   -H "X-OpenClaw-Token: twin-webhook-secret-2026" \
-  -d '{"text": "Wake up - urgent message waiting"}'
+  -d '{"text": "Urgent: deployment failed, need help"}'
 ```
 
-**Note:** Webhook token is `twin-webhook-secret-2026` for both twins.
+**Note:** 
+- Webhook token is `twin-webhook-secret-2026` for both twins
+- Messages arrive as system events (immediate, no persistence)
+- For longer messages, use git fallback and webhook just to wake
 
 ---
 
@@ -314,10 +319,10 @@ a2a_send "badger-1" "ratchet" "message"
 # Fallback: Git
 ~/clawd/scripts/send-to-ratchet.sh "message"
 
-# Emergency: Webhook wake
+# Emergency: Webhook (wakes + delivers short message, no persistence)
 curl -X POST http://198.199.86.203:18789/hooks/wake \
   -H "X-OpenClaw-Token: twin-webhook-secret-2026" \
-  -d '{"text":"urgent"}'
+  -d '{"text":"A2A down - check git"}'
 
 # === CHECK MESSAGES ===
 a2a_poll "badger-1"           # A2A
