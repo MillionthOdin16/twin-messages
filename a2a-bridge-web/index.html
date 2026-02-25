@@ -507,6 +507,10 @@
                 <button class="btn active" onclick="filterMessages('all')">All</button>
                 <button class="btn" onclick="filterMessages('badger-1')">🦡</button>
                 <button class="btn" onclick="filterMessages('ratchet')">🔧</button>
+                <input type="text" id="message-search" placeholder="Search messages..." 
+                       style="margin-left: auto; background: var(--bg-card); border: 1px solid var(--border); 
+                              color: var(--text-primary); padding: 0.25rem 0.5rem; border-radius: 6px; 
+                              font-size: 0.75rem;" onkeyup="searchMessages(this.value)">
             </div>
             <div class="messages-list" id="messages-container">
                 <div class="empty-state"><div class="empty-icon">💬</div><p>Loading...</p></div>
@@ -617,14 +621,17 @@
         }
         
         async function fetchMessages() {
+            const container = document.getElementById('messages-container');
             try {
                 const res = await fetch(`${API_URL}/messages/all?limit=50`);
+                if (!res.ok) throw new Error(res.statusText);
                 const data = await res.json();
                 messages = data.messages || [];
                 renderMessages();
                 updateStats();
             } catch (e) {
                 console.error('Messages error:', e);
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><p>Failed to load messages</p><button class="refresh-btn" onclick="fetchMessages()">Retry</button></div>';
             }
         }
         
@@ -662,15 +669,50 @@
             event.target.classList.add('active');
         }
         
+        function searchMessages(query) {
+            const container = document.getElementById('messages-container');
+            const q = query.toLowerCase();
+            const filtered = messages.filter(m => {
+                const matchFilter = currentMsgFilter === 'all' || m.from === currentMsgFilter;
+                const matchSearch = !q || (m.content?.text || '').toLowerCase().includes(q) || m.from.toLowerCase().includes(q);
+                return matchFilter && matchSearch;
+            });
+            
+            if (!filtered.length) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>No matching messages</p></div>';
+                return;
+            }
+            
+            container.innerHTML = filtered.map(m => `
+                <div class="message">
+                    <div class="message-header">
+                        <div class="message-avatar ${m.from === 'badger-1' ? 'badger' : 'ratchet'}">
+                            ${m.from === 'badger-1' ? '🦡' : '🔧'}
+                        </div>
+                        <span class="message-author">${m.from}</span>
+                        <span class="message-time">${formatTime(m.timestamp)}</span>
+                    </div>
+                    <div class="message-body">${escapeHtml(m.content?.text || '')}</div>
+                    <div class="message-meta">
+                        <span>To: ${m.to}</span>
+                        <span>${m.type}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
         async function fetchTasks() {
+            const container = document.getElementById('tasks-container');
             try {
                 const res = await fetch(`${API_URL}/tasks?limit=50&apiKey=${API_KEY}`);
+                if (!res.ok) throw new Error(res.statusText);
                 const data = await res.json();
                 tasks = data.tasks || [];
                 renderTasks();
                 updateStats();
             } catch (e) {
                 console.error('Tasks error:', e);
+                container.innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><p>Failed to load tasks</p><button class="refresh-btn" onclick="fetchTasks()">Retry</button></div>';
             }
         }
         
@@ -707,13 +749,16 @@
         }
         
         async function fetchAgents() {
+            const container = document.getElementById('agent-grid');
             try {
                 const res = await fetch(`${API_URL}/agents/cards`);
+                if (!res.ok) throw new Error(res.statusText);
                 const data = await res.json();
                 agents = data.agents || [];
                 renderAgents();
             } catch (e) {
                 console.error('Agents error:', e);
+                if (container) container.innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><p>Failed to load agents</p><button class="refresh-btn" onclick="fetchAgents()">Retry</button></div>';
             }
         }
         
