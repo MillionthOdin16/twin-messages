@@ -1,7 +1,7 @@
 # A2A Bridge Client
 # Simple client library for Ratchet to communicate via the A2A Bridge
 
-A2A_BRIDGE_URL="https://a2a.bradarr.com"
+A2A_BRIDGE_URL="https://a2a-api.bradarr.com"
 
 # Send a message to another agent
 a2a_send() {
