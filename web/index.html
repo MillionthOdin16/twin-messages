@@ -882,6 +882,7 @@
     }
 
     .delivery-status.delivered { color: var(--accent-green); }
+    .delivery-status.read { color: var(--accent-green); font-weight: 600; }
     .delivery-status.pending { color: var(--accent-yellow); }
     .delivery-status.failed { color: var(--accent-red); }
 
@@ -1520,7 +1521,7 @@
           </div>
           <textarea class="compose-textarea" id="compose-text" placeholder="Type your message... (Ctrl+Enter to send)"></textarea>
           <div class="compose-footer">
-            <span class="compose-hint">Messages delivered via WebSocket or webhook push</span>
+            <span class="compose-hint">Dashboard uses WebSocket for real-time updates</span>
             <button class="btn btn-success" id="send-btn" onclick="sendMessage()">📤 Send</button>
           </div>
         </div>
@@ -1772,7 +1773,31 @@
   <script>
     const API_URL = 'https://a2a-api.bradarr.com';
     
-    // State
+    // Delivery status cache
+    const deliveryStatus = new Map();
+
+    async function fetchDeliveryStatus(messageId) {
+      try {
+        const res = await fetch(`${API_URL}/messages/${messageId}/status`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        deliveryStatus.set(messageId, data);
+        return data;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function getDeliveryIcon(status) {
+      if (!status || !status.receipts || status.receipts.length === 0) {
+        return { icon: '⏳', class: 'pending', text: 'Pending' };
+      }
+      const hasDelivered = status.receipts.some(r => r.status === 'delivered');
+      const hasRead = status.receipts.some(r => r.status === 'read');
+      if (hasRead) return { icon: '✓✓', class: 'read', text: 'Read' };
+      if (hasDelivered) return { icon: '✓', class: 'delivered', text: 'Delivered' };
+      return { icon: '⏳', class: 'pending', text: 'Pending' };
+    }
     let messages = [];
     let tasks = [];
     let stats = {};
@@ -1811,11 +1836,11 @@
       // Load all data
       await refreshAll();
       
-      // Connect WebSocket
+      // Connect WebSocket (primary mode - no polling fallback for dashboard)
       connectWebSocket();
 
-      // Periodic refresh as fallback
-      setInterval(pollData, 30000);
+      // Dashboard uses WebSocket only - no polling needed
+      // WebSocket provides real-time updates for all data changes
     }
 
     function handleKeyboard(e) {
@@ -1922,24 +1947,21 @@
           renderMessages();
           updateStats();
           showToast(`📨 New message from ${data.from}`, 'success');
-          
-          // Play subtle notification sound (optional)
-          // new Audio('/notification.mp3').play().catch(() => {});
         }
+      } else if (data.type === 'receipt' || data.type === 'delivered') {
+        // Update delivery status for a message
+        console.log('Delivery confirmed:', data.messageId);
+        deliveryStatus.set(data.messageId, {
+          messageId: data.messageId,
+          receipts: [{ agentId: data.agentId, status: data.status || 'delivered', timestamp: data.timestamp }]
+        });
+        // Re-render to show updated status
+        renderMessages();
       } else if (data.type === 'connected') {
         showToast(`🔌 ${data.agentId} connected`, 'success');
         fetchAgents();
-      } else if (data.type === 'delivered') {
-        // Update delivery status for a message
-        console.log('Delivery confirmed:', data.messageId);
       } else if (data.type === 'error') {
         showToast(`❌ Error: ${data.error}`, 'error');
-      }
-    }
-
-    async function pollData() {
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        await Promise.all([fetchStats(), fetchMessages(), fetchTasks()]);
       }
     }
 
@@ -2064,6 +2086,28 @@
       const avatarClass = isBadger ? 'badger' : (isRatchet ? 'ratchet' : 'dashboard');
       const avatar = isBadger ? '🦡' : (isRatchet ? '🔧' : '🖥️');
       
+      // Get delivery status
+      const status = deliveryStatus.get(m.messageId);
+      const delivery = getDeliveryIcon(status);
+      
+      // Fetch delivery status if not cached
+      if (!status && !m._deliveryFetched) {
+        m._deliveryFetched = true;
+        fetchDeliveryStatus(m.messageId).then(() => {
+          // Re-render this message when status arrives
+          const el = document.getElementById(`msg-${m.messageId}`);
+          if (el) {
+            const newStatus = deliveryStatus.get(m.messageId);
+            const newDelivery = getDeliveryIcon(newStatus);
+            const statusEl = el.querySelector('.delivery-status');
+            if (statusEl) {
+              statusEl.className = `delivery-status ${newDelivery.class}`;
+              statusEl.innerHTML = `${newDelivery.icon} ${newDelivery.text}`;
+            }
+          }
+        });
+      }
+      
       let html = `
         <div class="message" id="msg-${m.messageId}">
           <div class="message-header">
@@ -2080,6 +2124,9 @@
             <span class="message-tag">${m.type || 'message'}</span>
             <span class="message-id">${m.messageId?.substring(0, 8)}</span>
             ${replies.length ? `<span class="message-tag">🧵 ${replies.length} replies</span>` : ''}
+            <span class="delivery-status ${delivery.class}" id="delivery-${m.messageId}">
+              ${delivery.icon} ${delivery.text}
+            </span>
             <div class="message-actions">
               <button class="message-action-btn" onclick="showReplyComposer('${m.messageId}')">↩️ Reply</button>
               ${replies.length ? `<button class="message-action-btn" onclick="showThread('${m.messageId}')">🧵 View Thread</button>` : ''}
