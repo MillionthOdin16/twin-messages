@@ -101,7 +101,7 @@ async function pushNotification(agentId, message) {
     }, { headers, timeout: 10000 });
     
     console.log(`Push notification sent to ${agentId} via webhook`);
-    return { delivered: true, method: 'webhook', status: 'pending_confirmation' };
+    return { notified: true, method: 'webhook', status: 'pending_confirmation' };
   } catch (err) {
     const errorMessage = err.response?.data?.message || err.response?.statusText || err.message || 'Unknown error';
     console.error(`Push notification error for ${agentId}:`, err.response?.status || errorMessage);
