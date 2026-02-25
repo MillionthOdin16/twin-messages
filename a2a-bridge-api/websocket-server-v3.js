@@ -1391,11 +1391,13 @@ app.get('/messages/search', async (req, res) => {
     // Limit results
     messages = messages.slice(0, parseInt(limit));
     
-    res.json({ 
+    const response = { 
       messages, 
       count: messages.length,
       query: { q, from, to }
-    });
+    };
+    console.log('Search response:', JSON.stringify(response));
+    res.json(response);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
