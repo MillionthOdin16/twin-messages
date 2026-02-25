@@ -30,16 +30,10 @@
             background: var(--bg-primary);
             color: var(--text-primary);
             min-height: 100vh;
-            line-height: 1.5;
         }
         
-        /* Mobile-first responsive */
-        .container {
-            padding: 1rem;
-            max-width: 100%;
-        }
+        .container { padding: 1rem; }
         
-        /* Header */
         header {
             background: rgba(17, 24, 32, 0.95);
             backdrop-filter: blur(20px);
@@ -50,19 +44,7 @@
             z-index: 100;
         }
         
-        .header-content {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-        
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
+        .header-content { display: flex; align-items: center; justify-content: space-between; }
         
         .logo h1 {
             font-size: 1.1rem;
@@ -70,381 +52,114 @@
             background: linear-gradient(135deg, #a855f7, #10b981);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
         
-        .badges {
-            display: flex;
-            gap: 0.35rem;
-        }
-        
-        .badge {
-            padding: 0.15rem 0.5rem;
-            border-radius: 12px;
-            font-size: 0.65rem;
-            font-weight: 600;
-        }
-        
+        .badges { display: flex; gap: 0.35rem; }
+        .badge { padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.65rem; font-weight: 600; }
         .badge-badger { background: rgba(168, 85, 247, 0.25); color: #a855f7; }
         .badge-ratchet { background: rgba(16, 185, 129, 0.25); color: #10b981; }
         
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 0.35rem;
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-        }
-        
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--accent-green);
-        }
-        
+        .status-indicator { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-secondary); }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); }
         .status-dot.error { background: var(--accent-red); }
         
-        /* Stats - Mobile Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-        
-        .stat-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 0.75rem;
-            text-align: center;
-        }
-        
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; text-align: center; }
         .stat-card.messages { border-left: 3px solid var(--accent-blue); }
         .stat-card.tasks { border-left: 3px solid var(--accent-purple); }
         .stat-card.agents { border-left: 3px solid var(--accent-green); }
+        .stat-card.system { border-left: 3px solid var(--accent-orange); }
+        .stat-value { font-size: 1.5rem; font-weight: 700; }
+        .stat-label { font-size: 0.7rem; color: var(--text-secondary); }
         
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-        }
-        
-        .stat-label {
-            font-size: 0.7rem;
-            color: var(--text-secondary);
-        }
-        
-        /* Tabs - Horizontal Scroll on Mobile */
-        .tabs {
-            display: flex;
-            gap: 0.25rem;
-            margin-bottom: 1rem;
-            overflow-x: auto;
-            padding-bottom: 0.5rem;
-            -webkit-overflow-scrolling: touch;
-        }
-        
+        .tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; overflow-x: auto; padding-bottom: 0.5rem; }
         .tabs::-webkit-scrollbar { display: none; }
-        
-        .tab {
-            padding: 0.5rem 1rem;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            font-size: 0.8rem;
-            font-weight: 500;
-            cursor: pointer;
-            border-radius: 8px;
-            white-space: nowrap;
-            transition: all 0.2s;
-        }
-        
+        .tab { padding: 0.5rem 1rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary); font-size: 0.8rem; font-weight: 500; cursor: pointer; border-radius: 8px; white-space: nowrap; }
         .tab:hover { background: var(--bg-hover); }
-        
-        .tab.active {
-            background: var(--accent-blue);
-            border-color: var(--accent-blue);
-            color: white;
-        }
-        
+        .tab.active { background: var(--accent-blue); border-color: var(--accent-blue); color: white; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         
-        /* Agent Cards - Stack on Mobile */
-        .agent-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-        
-        .agent-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1rem;
-        }
-        
+        .agent-grid { display: flex; flex-direction: column; gap: 0.75rem; }
+        .agent-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
         .agent-card.badger { border-left: 4px solid var(--accent-purple); }
         .agent-card.ratchet { border-left: 4px solid var(--accent-green); }
         
-        .agent-header {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 0.75rem;
-        }
-        
-        .agent-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.25rem;
-            flex-shrink: 0;
-        }
-        
+        .agent-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+        .agent-avatar { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
         .agent-card.badger .agent-avatar { background: var(--badger-gradient); }
         .agent-card.ratchet .agent-avatar { background: var(--ratchet-gradient); }
+        .agent-info h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.15rem; }
         
-        .agent-info h3 {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 0.15rem;
-        }
-        
-        .agent-status {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.25rem;
-            font-size: 0.7rem;
-            padding: 0.15rem 0.5rem;
-            border-radius: 20px;
-        }
-        
+        .agent-status { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 20px; }
         .agent-status.online { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
         .agent-status.webhook { background: rgba(245, 158, 11, 0.2); color: var(--accent-orange); }
-        .agent-status.offline { background: rgba(139, 148, 158, 0.2); color: var(--text-secondary); }
+        .agent-status.offline { background: rgba(139, 148, 158, 0.2); color:); }
         
-        .agent-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 0.5rem;
-        }
-        
-        .agent-stat {
-            background: rgba(0, 0, 0, 0.2);
-            padding: 0.5rem;
-            border-radius: 6px;
-            text-align: center;
-        }
-        
+        var(--text-secondary .agent-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+        .agent-stat { background: rgba(0, 0, 0, 0.2); padding: 0.5rem; border-radius: 6px; text-align: center; }
         .agent-stat-value { font-size: 1rem; font-weight: 700; }
         .agent-stat-label { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; }
         
-        .capabilities {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.35rem;
-            margin-top: 0.75rem;
-        }
+        .last-activity { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem; }
+        .last-activity span { color: var(--text-secondary); }
         
-        .capability {
-            padding: 0.2rem 0.5rem;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            font-size: 0.65rem;
-            color: var(--text-secondary);
-        }
+        .capabilities { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.75rem; }
+        .capability { padding: 0.2rem 0.5rem; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border); border-radius: 12px; font-size: 0.65rem; color: var(--text-secondary); }
         
-        /* Messages */
-        .messages-list {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
-        }
-        
-        .message {
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--border);
-        }
-        
+        .messages-list { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .message { padding: 0.75rem; border-bottom: 1px solid var(--border); }
         .message:last-child { border-bottom: none; }
-        
-        .message-header {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.35rem;
-        }
-        
-        .message-avatar {
-            width: 28px;
-            height: 28px;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.85rem;
-            flex-shrink: 0;
-        }
-        
+        .message-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
+        .message-avatar { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; }
         .message-avatar.badger { background: var(--badger-gradient); }
         .message-avatar.ratchet { background: var(--ratchet-gradient); }
-        
         .message-author { font-weight: 600; font-size: 0.85rem; flex: 1; }
         .message-time { font-size: 0.65rem; color: var(--text-muted); }
+        .message-body { color: var(--text-secondary); font-size: 0.8rem; line-height: 1.5; padding-left: 2.25rem; word-break: break-word; }
+        .message-meta { display: flex; gap: 0.5rem; margin-top: 0.35rem; padding-left: 2.25rem; font-size: 0.65rem; color: var(--text-muted); }
         
-        .message-body {
-            color: var(--text-secondary);
-            font-size: 0.8rem;
-            line-height: 1.5;
-            padding-left: 2.25rem;
-            word-break: break-word;
-        }
-        
-        .message-meta {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 0.35rem;
-            padding-left: 2.25rem;
-            font-size: 0.65rem;
-            color: var(--text-muted);
-        }
-        
-        /* Tasks */
-        .tasks-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-        
-        .task-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 0.75rem;
-            position: relative;
-        }
-        
-        .task-card::before {
-            content: '';
-            position: absolute;
-            left: 0; top: 0; bottom: 0;
-            width: 3px;
-            border-radius: 10px 0 0 10px;
-        }
-        
+        .tasks-grid { display: flex; flex-direction: column; gap: 0.5rem; }
+        .task-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; position: relative; }
+        .task-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 10px 0 0 10px; }
         .task-card.submitted::before { background: var(--text-muted); }
         .task-card.working::before { background: var(--accent-blue); }
         .task-card.completed::before { background: var(--accent-green); }
         .task-card.failed::before { background: var(--accent-red); }
-        
-        .task-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.35rem;
-        }
-        
-        .task-type {
-            font-size: 0.6rem;
-            text-transform: uppercase;
-            padding: 0.15rem 0.4rem;
-            border-radius: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            color: var(--text-secondary);
-        }
-        
-        .task-state {
-            font-size: 0.6rem;
-            padding: 0.15rem 0.4rem;
-            border-radius: 4px;
-        }
-        
+        .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; }
+        .task-type { font-size: 0.6rem; text-transform: uppercase; padding: 0.15rem 0.4rem; border-radius: 4px; background: rgba(255, 255, 255, 0.1); color: var(--text-secondary); }
+        .task-state { font-size: 0.6rem; padding: 0.15rem 0.4rem; border-radius: 4px; }
         .task-state.submitted { background: rgba(139, 148, 158, 0.2); color: var(--text-secondary); }
         .task-state.working { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
         .task-state.completed { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
         .task-state.failed { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
-        
         .task-id { font-size: 0.65rem; color: var(--text-muted); font-family: monospace; }
+        .task-input { font-size: 0.75rem; color: var(--text-secondary); margin: 0.35rem 0; }
+        .task-meta { display: flex; gap: 0.75rem; font-size: 0.6rem; color: var(--text-muted); }
         
-        .task-input {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            margin: 0.35rem 0;
-        }
-        
-        .task-meta {
-            display: flex;
-            gap: 0.75rem;
-            font-size: 0.6rem;
-            color: var(--text-muted);
-        }
-        
-        /* System */
-        .system-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.5rem;
-        }
-        
-        .system-item {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 0.75rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
+        .system-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+        .system-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
         .system-label { font-size: 0.8rem; color: var(--text-secondary); }
-        
         .system-value { font-size: 0.8rem; font-weight: 600; }
         .system-value.healthy { color: var(--accent-green); }
         .system-value.error { color: var(--accent-red); }
         
-        /* Empty */
-        .empty-state {
-            text-align: center;
-            padding: 2rem 1rem;
-            color: var(--text-muted);
-        }
-        
+        .empty-state { text-align: center; padding: 2rem 1rem; color: var(--text-muted); }
         .empty-icon { font-size: 2rem; margin-bottom: 0.5rem; }
         
-        /* Controls */
-        .controls {
-            display: flex;
-            gap: 0.35rem;
-            margin-bottom: 0.75rem;
-            overflow-x: auto;
-            padding-bottom: 0.5rem;
-        }
-        
-        .btn {
-            padding: 0.4rem 0.75rem;
-            border-radius: 6px;
-            font-size: 0.75rem;
-            cursor: pointer;
-            border: 1px solid var(--border);
-            background: var(--bg-card);
-            color: var(--text-secondary);
-            white-space: nowrap;
-        }
-        
+        .controls { display: flex; gap: 0.35rem; margin-bottom: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; }
+        .btn { padding: 0.4rem 0.75rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); white-space: nowrap; }
         .btn:hover { background: var(--bg-hover); color: var(--text-primary); }
         .btn.active { background: var(--accent-blue); border-color: var(--accent-blue); color: white; }
         
-        /* Scrollbar */
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: var(--bg-primary); }
         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        
+        .error-banner { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--accent-red); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem; color: var(--accent-red); font-size: 0.8rem; display: none; }
+        .error-banner.show { display: block; }
+        
+        .refresh-info { font-size: 0.65rem; color: var(--text-muted); text-align: center; margin-top: 0.5rem; }
     </style>
 </head>
 <body>
@@ -465,7 +180,8 @@
     </header>
     
     <div class="container">
-        <!-- Stats -->
+        <div class="error-banner" id="error-banner"></div>
+        
         <div class="stats-grid">
             <div class="stat-card messages">
                 <div class="stat-value" id="stat-messages">-</div>
@@ -479,13 +195,12 @@
                 <div class="stat-value" id="stat-agents">-</div>
                 <div class="stat-label">Agents</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card system">
                 <div class="stat-value" id="stat-webhooks">-</div>
                 <div class="stat-label">Webhooks</div>
             </div>
         </div>
         
-        <!-- Tabs -->
         <div class="tabs">
             <button class="tab active" data-tab="overview">Overview</button>
             <button class="tab" data-tab="messages">Messages</button>
@@ -494,30 +209,23 @@
             <button class="tab" data-tab="system">System</button>
         </div>
         
-        <!-- Overview -->
         <div class="tab-content active" id="overview">
             <div class="agent-grid" id="agent-grid">
                 <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading...</p></div>
             </div>
         </div>
         
-        <!-- Messages -->
         <div class="tab-content" id="messages">
             <div class="controls">
                 <button class="btn active" onclick="filterMessages('all')">All</button>
                 <button class="btn" onclick="filterMessages('badger-1')">🦡</button>
                 <button class="btn" onclick="filterMessages('ratchet')">🔧</button>
-                <input type="text" id="message-search" placeholder="Search messages..." 
-                       style="margin-left: auto; background: var(--bg-card); border: 1px solid var(--border); 
-                              color: var(--text-primary); padding: 0.25rem 0.5rem; border-radius: 6px; 
-                              font-size: 0.75rem;" onkeyup="searchMessages(this.value)">
             </div>
             <div class="messages-list" id="messages-container">
                 <div class="empty-state"><div class="empty-icon">💬</div><p>Loading...</p></div>
             </div>
         </div>
         
-        <!-- Tasks -->
         <div class="tab-content" id="tasks">
             <div class="controls">
                 <button class="btn active" onclick="filterTasks('all')">All</button>
@@ -531,14 +239,12 @@
             </div>
         </div>
         
-        <!-- Agents -->
         <div class="tab-content" id="agents">
             <div class="agent-grid" id="agents-container">
                 <div class="empty-state"><div class="empty-icon">🎴</div><p>Loading...</p></div>
             </div>
         </div>
         
-        <!-- System -->
         <div class="tab-content" id="system">
             <div class="system-grid">
                 <div class="system-item">
@@ -554,11 +260,13 @@
                     <span class="system-value" id="sys-apikeys">-</span>
                 </div>
                 <div class="system-item">
-                    <span class="system-label">Uptime</span>
-                    <span class="system-value" id="sys-uptime">-</span>
+                    <span class="system-label">Connected</span>
+                    <span class="system-value" id="sys-connected">-</span>
                 </div>
             </div>
         </div>
+        
+        <div class="refresh-info">Auto-refresh: 15s | Last: <span id="last-update">-</span></div>
     </div>
 
     <script>
@@ -568,10 +276,10 @@
         let messages = [];
         let tasks = [];
         let agents = [];
+        let stats = {};
         let currentMsgFilter = 'all';
         let currentTaskFilter = 'all';
         
-        // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -581,57 +289,72 @@
             });
         });
         
-        // Fetch all data
+        function showError(msg) {
+            const banner = document.getElementById('error-banner');
+            banner.textContent = msg;
+            banner.classList.toggle('show', !!msg);
+        }
+        
+        function updateTimestamp() {
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+        }
+        
         async function init() {
-            await Promise.all([
-                fetchHealth(),
-                fetchMessages(),
-                fetchTasks(),
-                fetchAgents()
-            ]);
+            try {
+                await Promise.all([fetchStats(), fetchMessages(), fetchTasks(), fetchAgents()]);
+                showError('');
+            } catch (e) {
+                showError('Error: ' + e.message);
+            }
             
-            // Refresh every 15s
-            setInterval(() => {
-                fetchMessages();
-                fetchTasks();
+            setInterval(async () => {
+                try {
+                    await Promise.all([fetchStats(), fetchMessages(), fetchTasks()]);
+                } catch (e) {
+                    showError('Update failed: ' + e.message);
+                }
             }, 15000);
         }
         
-        async function fetchHealth() {
+        async function fetchStats() {
             try {
-                const res = await fetch(`${API_URL}/health`);
-                const data = await res.json();
+                const res = await fetch(`${API_URL}/stats`);
+                if (!res.ok) throw new Error('Stats failed');
+                stats = await res.json();
+                renderStats();
                 
-                document.getElementById('status-dot').classList.toggle('error', data.status !== 'healthy');
-                document.getElementById('status-text').textContent = data.status === 'healthy' ? 'Connected' : 'Error';
-                
-                document.getElementById('sys-redis').textContent = data.redis === 'connected' ? '✓' : '✗';
-                document.getElementById('sys-redis').className = 'system-value ' + (data.redis === 'connected' ? 'healthy' : 'error');
-                
-                document.getElementById('sys-ws').textContent = data.websocket === 'enabled' ? '✓' : '✗';
-                document.getElementById('sys-ws').className = 'system-value ' + (data.websocket === 'enabled' ? 'healthy' : 'error');
-                
-                document.getElementById('sys-apikeys').textContent = data.apiKeys || 0;
-                document.getElementById('stat-webhooks').textContent = data.registeredWebhooks || 0;
+                document.getElementById('status-dot').classList.remove('error');
+                document.getElementById('status-text').textContent = 'Connected';
             } catch (e) {
-                console.error('Health error:', e);
-                document.getElementById('status-text').textContent = 'Error';
                 document.getElementById('status-dot').classList.add('error');
+                document.getElementById('status-text').textContent = 'Error';
             }
         }
         
+        function renderStats() {
+            document.getElementById('stat-messages').textContent = stats.messages?.total || 0;
+            document.getElementById('stat-tasks').textContent = stats.tasks?.active || 0;
+            document.getElementById('stat-agents').textContent = stats.agents?.webhooks || 0;
+            document.getElementById('stat-webhooks').textContent = stats.agents?.webhooks || 0;
+            document.getElementById('sys-apikeys').textContent = stats.agents?.apiKeys || 0;
+            document.getElementById('sys-connected').textContent = (stats.agents?.connected || []).join(', ') || 'None';
+            
+            const lastActivity = stats.agents?.lastActivity || {};
+            document.getElementById('badger-last').textContent = lastActivity['badger-1'] ? formatTimeAgo(lastActivity['badger-1']) : 'Never';
+            document.getElementById('ratchet-last').textContent = lastActivity['ratchet'] ? formatTimeAgo(lastActivity['ratchet']) : 'Never';
+            
+            updateTimestamp();
+        }
+        
         async function fetchMessages() {
-            const container = document.getElementById('messages-container');
             try {
                 const res = await fetch(`${API_URL}/messages/all?limit=50`);
-                if (!res.ok) throw new Error(res.statusText);
+                if (!res.ok) throw new Error('Messages failed');
                 const data = await res.json();
                 messages = data.messages || [];
                 renderMessages();
-                updateStats();
             } catch (e) {
-                console.error('Messages error:', e);
-                container.innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><p>Failed to load messages</p><button class="refresh-btn" onclick="fetchMessages()">Retry</button></div>';
+                document.getElementById('messages-container').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Failed to load</p></div>';
             }
         }
         
@@ -647,17 +370,12 @@
             container.innerHTML = filtered.map(m => `
                 <div class="message">
                     <div class="message-header">
-                        <div class="message-avatar ${m.from === 'badger-1' ? 'badger' : 'ratchet'}">
-                            ${m.from === 'badger-1' ? '🦡' : '🔧'}
-                        </div>
+                        <div class="message-avatar ${m.from === 'badger-1' ? 'badger' : 'ratchet'}">${m.from === 'badger-1' ? '🦡' : '🔧'}</div>
                         <span class="message-author">${m.from}</span>
                         <span class="message-time">${formatTime(m.timestamp)}</span>
                     </div>
                     <div class="message-body">${escapeHtml(m.content?.text || '')}</div>
-                    <div class="message-meta">
-                        <span>To: ${m.to}</span>
-                        <span>${m.type}</span>
-                    </div>
+                    <div class="message-meta"><span>To: ${m.to}</span><span>${m.type}</span></div>
                 </div>
             `).join('');
         }
@@ -669,50 +387,15 @@
             event.target.classList.add('active');
         }
         
-        function searchMessages(query) {
-            const container = document.getElementById('messages-container');
-            const q = query.toLowerCase();
-            const filtered = messages.filter(m => {
-                const matchFilter = currentMsgFilter === 'all' || m.from === currentMsgFilter;
-                const matchSearch = !q || (m.content?.text || '').toLowerCase().includes(q) || m.from.toLowerCase().includes(q);
-                return matchFilter && matchSearch;
-            });
-            
-            if (!filtered.length) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>No matching messages</p></div>';
-                return;
-            }
-            
-            container.innerHTML = filtered.map(m => `
-                <div class="message">
-                    <div class="message-header">
-                        <div class="message-avatar ${m.from === 'badger-1' ? 'badger' : 'ratchet'}">
-                            ${m.from === 'badger-1' ? '🦡' : '🔧'}
-                        </div>
-                        <span class="message-author">${m.from}</span>
-                        <span class="message-time">${formatTime(m.timestamp)}</span>
-                    </div>
-                    <div class="message-body">${escapeHtml(m.content?.text || '')}</div>
-                    <div class="message-meta">
-                        <span>To: ${m.to}</span>
-                        <span>${m.type}</span>
-                    </div>
-                </div>
-            `).join('');
-        }
-        
         async function fetchTasks() {
-            const container = document.getElementById('tasks-container');
             try {
                 const res = await fetch(`${API_URL}/tasks?limit=50&apiKey=${API_KEY}`);
-                if (!res.ok) throw new Error(res.statusText);
+                if (!res.ok) throw new Error('Tasks failed');
                 const data = await res.json();
                 tasks = data.tasks || [];
                 renderTasks();
-                updateStats();
             } catch (e) {
-                console.error('Tasks error:', e);
-                container.innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><p>Failed to load tasks</p><button class="refresh-btn" onclick="fetchTasks()">Retry</button></div>';
+                document.getElementById('tasks-container').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Failed to load</p></div>';
             }
         }
         
@@ -733,10 +416,7 @@
                     </div>
                     <div class="task-id">ID: ${(t.id || '').slice(0, 12)}...</div>
                     <div class="task-input">${escapeHtml(JSON.stringify(t.input || {}))}</div>
-                    <div class="task-meta">
-                        <span>From: ${t.createdBy}</span>
-                        <span>To: ${t.agentId}</span>
-                    </div>
+                    <div class="task-meta"><span>From: ${t.createdBy}</span><span>To: ${t.agentId}</span></div>
                 </div>
             `).join('');
         }
@@ -749,29 +429,30 @@
         }
         
         async function fetchAgents() {
-            const container = document.getElementById('agent-grid');
             try {
-                const res = await fetch(`${API_URL}/agents/cards`);
-                if (!res.ok) throw new Error(res.statusText);
-                const data = await res.json();
-                agents = data.agents || [];
+                const [badger, ratchet] = await Promise.all([
+                    fetch(`${API_URL}/agents/badger-1`).then(r => r.json()).catch(() => null),
+                    fetch(`${API_URL}/agents/ratchet`).then(r => r.json()).catch(() => null)
+                ]);
+                
+                agents = [badger, ratchet].filter(Boolean);
                 renderAgents();
             } catch (e) {
                 console.error('Agents error:', e);
-                if (container) container.innerHTML = '<div class="empty-state"><div class="empty-icon">❌</div><p>Failed to load agents</p><button class="refresh-btn" onclick="fetchAgents()">Retry</button></div>';
             }
         }
         
         function renderAgents() {
-            // Overview cards
+            const lastActivity = stats.agents?.lastActivity || {};
+            
             const overview = document.getElementById('agent-grid');
-            overview.innerHTML = agents.slice(0, 2).map(a => `
+            overview.innerHTML = agents.map(a => `
                 <div class="agent-card ${a.agentId === 'badger-1' ? 'badger' : 'ratchet'}">
                     <div class="agent-header">
                         <div class="agent-avatar">${a.agentId === 'badger-1' ? '🦡' : '🔧'}</div>
                         <div class="agent-info">
-                            <h3>${a.name || a.agentId}</h3>
-                            <span class="agent-status webhook">Webhook</span>
+                            <h3>${a.agentId}</h3>
+                            <span class="agent-status ${a.status}">${a.status || 'offline'}</span>
                         </div>
                     </div>
                     <div class="agent-stats">
@@ -784,48 +465,48 @@
                             <div class="agent-stat-label">Tasks</div>
                         </div>
                         <div class="agent-stat">
-                            <div class="agent-stat-value">${a.capabilities ? Object.keys(a.capabilities).length : 0}</div>
-                            <div class="agent-stat-label">Caps</div>
+                            <div class="agent-stat-value">${a.hasApiKey ? '✓' : '✗'}</div>
+                            <div class="agent-stat-label">API Key</div>
                         </div>
                     </div>
-                    <div class="capabilities">
-                        ${(a.skills || []).map(s => `<span class="capability">${s.name || s.id}</span>`).join('')}
-                        ${(a.capabilities ? Object.keys(a.capabilities) : []).map(c => `<span class="capability">${c}</span>`).join('')}
-                    </div>
+                    <div class="last-activity">Last activity: <span id="${a.agentId}-last">${lastActivity[a.agentId] ? formatTimeAgo(lastActivity[a.agentId]) : 'Unknown'}</span></div>
                 </div>
             `).join('');
             
-            // Full agents tab
             const agentsTab = document.getElementById('agents-container');
             agentsTab.innerHTML = agents.map(a => `
                 <div class="agent-card ${a.agentId === 'badger-1' ? 'badger' : 'ratchet'}">
                     <div class="agent-header">
                         <div class="agent-avatar">${a.agentId === 'badger-1' ? '🦡' : '🔧'}</div>
                         <div class="agent-info">
-                            <h3>${a.name || a.agentId}</h3>
-                            <span class="agent-status webhook">${a.status || 'available'}</span>
+                            <h3>${a.agentId}</h3>
+                            <span class="agent-status ${a.status}">${a.status}</span>
                         </div>
                     </div>
-                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">${a.description || ''}</p>
-                    <p style="font-size: 0.7rem; color: var(--text-muted);">Version: ${a.version || '1.0'}</p>
-                    <div class="capabilities">
-                        ${(a.skills || []).map(s => `<span class="capability">${s.name || s.id}</span>`).join('')}
+                    <div class="agent-stats">
+                        <div class="agent-stat"><div class="agent-stat-value">${a.isConnected ? 'Yes' : 'No'}</div><div class="agent-stat-label">WebSocket</div></div>
+                        <div class="agent-stat"><div class="agent-stat-value">${a.hasWebhook ? '✓' : '✗'}</div><div class="agent-stat-label">Webhook</div></div>
+                        <div class="agent-stat"><div class="agent-stat-value">${a.hasApiKey ? '✓' : '✗'}</div><div class="agent-stat-label">API Key</div></div>
                     </div>
+                    <div class="last-activity">Last activity: <span>${a.lastActivity ? formatTimeAgo(a.lastActivity) : 'Unknown'}</span></div>
                 </div>
             `).join('');
-            
-            document.getElementById('stat-agents').textContent = agents.length;
-        }
-        
-        function updateStats() {
-            document.getElementById('stat-messages').textContent = messages.length;
-            document.getElementById('stat-tasks').textContent = tasks.length;
         }
         
         function formatTime(ts) {
             if (!ts) return '';
-            const d = new Date(ts);
-            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        function formatTimeAgo(ts) {
+            if (!ts) return 'Unknown';
+            const diff = Date.now() - new Date(ts).getTime();
+            const mins = Math.floor(diff / 60000);
+            if (mins < 1) return 'Just now';
+            if (mins < 60) return `${mins}m ago`;
+            const hours = Math.floor(mins / 60);
+            if (hours < 24) return `${hours}h ago`;
+            return `${Math.floor(hours / 24)}d ago`;
         }
         
         function escapeHtml(str) {
@@ -833,7 +514,6 @@
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
         
-        // Start
         init();
     </script>
 </body>
