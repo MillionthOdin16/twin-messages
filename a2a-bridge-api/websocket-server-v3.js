@@ -1248,8 +1248,9 @@ app.get('/agents', (req, res) => {
 app.get('/health', async (req, res) => {
   try {
     await redisClient.ping();
-    res.json({ 
-      status: 'healthy', 
+    res.json({
+      status: 'healthy',
+      version: '2.1.0',
       redis: 'connected',
       websocket: 'enabled',
       pushNotifications: 'enabled',
