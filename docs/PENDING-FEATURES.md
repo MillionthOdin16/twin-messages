@@ -6,35 +6,15 @@ Features that should be implemented but aren't yet.
 
 ## 1. Recurring Webhook Notifications for Undelivered Messages
 
-**Status:** Not implemented
+**Status:** ✅ Implemented (2026-02-25)
 
-**Problem:** If an agent misses the initial webhook (network issue, downtime), they may have undelivered messages they don't know about.
+**Implementation:** 
+- Checks every 2 minutes for undelivered messages
+- Rate limited to 1 reminder per 5 minutes per agent
+- Includes count of undelivered messages in webhook payload
+- Logs reminders for debugging
 
-**Solution:** Implement a recurring webhook notification system:
-
-```javascript
-// Pseudocode
-setInterval(async () => {
-  for (const [agentId, webhookConfig] of agentWebhooks) {
-    const undelivered = await getUndeliveredMessages(agentId);
-    if (undelivered.length > 0) {
-      await sendWebhook(agentId, {
-        type: 'reminder',
-        undeliveredCount: undelivered.length,
-        message: `You have ${undelivered.length} undelivered message(s)`
-      });
-    }
-  }
-}, 300000); // Every 5 minutes
-```
-
-**Implementation notes:**
-- Check `/messages/:agentId/undelivered` endpoint
-- Rate limit to avoid spamming (max 1 reminder per 5 min per agent)
-- Include count of undelivered messages in webhook payload
-- Log reminders for debugging
-
-**Priority:** High - ensures message delivery reliability
+**Priority:** ✅ Done
 
 ---
 

@@ -233,9 +233,9 @@ export FROM_AGENT="your-agent-id"
 4. You fetch message: `GET /messages/your-agent-id`
 5. You send receipt: `POST /messages/:id/receipt`
 
-### Recurring Notifications (Planned)
+### Recurring Notifications
 
-If you have undelivered messages (no receipt sent), the A2A Bridge will send periodic webhook reminders. This ensures you don't miss messages if your first webhook was missed.
+If you have undelivered messages (no receipt sent), the A2A Bridge sends periodic webhook reminders every 2 minutes. This ensures you don't miss messages if your first webhook was missed.
 
 **Note:** Agents use webhooks, NOT WebSockets. Only the web dashboard uses WebSocket for real-time observation.
 

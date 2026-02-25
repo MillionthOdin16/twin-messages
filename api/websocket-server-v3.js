@@ -201,6 +201,112 @@ async function init() {
     console.log(`A2A Bridge V3 (Auth + Tasks + AgentCards) running on port ${PORT}`);
     console.log(`Features: WebSocket + Webhook Push + Authentication + Tasks`);
   });
+  
+  // Start recurring webhook notifications for undelivered messages
+  startUndeliveredMessageNotifier();
+}
+
+// ==================== RECURRING WEBHOOK NOTIFICATIONS ====================
+// Sends periodic reminders to agents with undelivered messages
+
+async function getUndeliveredMessages(agentId, limit = 100) {
+  try {
+    const messages = await redisClient.lRange(`messages:${agentId}`, 0, limit - 1);
+    const parsedMessages = messages.map(m => JSON.parse(m));
+    
+    const undelivered = [];
+    for (const message of parsedMessages) {
+      const receipt = await redisClient.hGet(`receipts:${message.messageId}`, agentId);
+      if (!receipt) {
+        undelivered.push(message);
+      }
+    }
+    return undelivered;
+  } catch (err) {
+    console.error(`Error getting undelivered messages for ${agentId}:`, err);
+    return [];
+  }
+}
+
+async function sendUndeliveredReminder(agentId, undeliveredCount) {
+  const webhookConfig = agentWebhooks.get(agentId);
+  if (!webhookConfig) {
+    return { sent: false, reason: 'no_webhook' };
+  }
+  
+  // Check if we already sent a reminder recently (rate limiting)
+  const lastReminder = await redisClient.get(`reminder:${agentId}:last`);
+  if (lastReminder) {
+    const lastTime = parseInt(lastReminder);
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000;
+    if (now - lastTime < fiveMinutes) {
+      return { sent: false, reason: 'rate_limited' };
+    }
+  }
+  
+  const webhookUrl = webhookConfig.url || webhookConfig;
+  const webhookToken = webhookConfig.token;
+  
+  try {
+    const axios = require('axios');
+    await axios.post(webhookUrl, {
+      source: 'a2a-bridge',
+      type: 'undelivered_reminder',
+      timestamp: new Date().toISOString(),
+      agentId: agentId,
+      undeliveredCount: undeliveredCount,
+      text: `[A2A] You have ${undeliveredCount} undelivered message(s). Check your messages.`,
+      a2a_metadata: {
+        bridge: 'a2a-bridge',
+        type: 'undelivered_reminder',
+        undeliveredCount: undeliveredCount,
+        action: 'fetch_messages'
+      }
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-A2A-Source': 'a2a-bridge',
+        ...(webhookToken ? { 'X-OpenClaw-Token': webhookToken } : {})
+      },
+      timeout: 10000
+    });
+    
+    // Record reminder time
+    await redisClient.set(`reminder:${agentId}:last`, Date.now().toString(), {
+      EX: 300 // Expire after 5 minutes
+    });
+    
+    console.log(`Undelivered reminder sent to ${agentId}: ${undeliveredCount} messages`);
+    return { sent: true };
+  } catch (err) {
+    console.error(`Failed to send undelivered reminder to ${agentId}:`, err.message);
+    return { sent: false, reason: 'webhook_failed', error: err.message };
+  }
+}
+
+function startUndeliveredMessageNotifier() {
+  // Check every 2 minutes for undelivered messages
+  const intervalMs = 2 * 60 * 1000;
+  
+  setInterval(async () => {
+    try {
+      const agentIds = Array.from(agentWebhooks.keys());
+      
+      for (const agentId of agentIds) {
+        const undelivered = await getUndeliveredMessages(agentId, 50);
+        
+        if (undelivered.length > 0) {
+          console.log(`Found ${undelivered.length} undelivered messages for ${agentId}`);
+          await sendUndeliveredReminder(agentId, undelivered.length);
+        }
+      }
+    } catch (err) {
+      console.error('Error in undelivered message notifier:', err);
+    }
+  }, intervalMs);
+  
+  console.log('Undelivered message notifier started (checking every 2 minutes)');
 }
 
 init().catch(console.error);
