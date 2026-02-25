@@ -1558,6 +1558,9 @@ app.get('/conversations', async (req, res) => {
     const conversations = {};
     
     for (const msg of messages) {
+      // Skip messages with null/undefined from or to
+      if (!msg.from || !msg.to) continue;
+      
       const pair = [msg.from, msg.to].sort().join(':');
       if (!conversations[pair]) {
         conversations[pair] = {
