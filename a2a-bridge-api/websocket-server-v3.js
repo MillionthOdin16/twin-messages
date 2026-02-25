@@ -207,6 +207,22 @@ init().catch(console.error);
 
 // ==================== TASK MANAGEMENT ====================
 
+// Task types
+const TASK_TYPES = {
+  RESEARCH: 'research',
+  SYNTHESIS: 'synthesis',
+  ACTION: 'action',
+  MESSAGE: 'message',
+  WITNESS: 'witness'
+};
+
+// Task priority
+const TASK_PRIORITY = {
+  HIGH: 'high',
+  NORMAL: 'normal',
+  LOW: 'low'
+};
+
 // Task states: submitted → working → completed/failed/canceled
 const TASK_STATES = {
   SUBMITTED: 'submitted',
@@ -220,19 +236,25 @@ const TASK_STATES = {
 
 // Create a new task
 async function createTask(task) {
-  const taskId = uuidv4();
+  const taskId = task.taskId || uuidv4();
   const now = new Date().toISOString();
   
   const taskData = {
     taskId,
     agentId: task.agentId,
+    type: task.type || TASK_TYPES.ACTION,
     status: TASK_STATES.SUBMITTED,
+    priority: task.priority || TASK_PRIORITY.NORMAL,
     createdAt: now,
     updatedAt: now,
     submittedAt: now,
     createdBy: task.createdBy || 'unknown',
     input: task.input || {},
     output: null,
+    callback: task.callback || null,
+    deadline: task.deadline || null,
+    dependencies: task.dependencies || [],
+    resultFor: task.resultFor || null,  // Who should receive the result
     history: [
       {
         state: TASK_STATES.SUBMITTED,
@@ -247,11 +269,15 @@ async function createTask(task) {
   await redisClient.hSet(`tasks:${task.agentId}`, taskId, JSON.stringify(taskData));
   await redisClient.zAdd('tasks:all', { score: Date.now(), value: taskId });
   
+  console.log(`Task created: ${taskId} (${taskData.type}) by ${task.createdBy} for ${task.agentId}`);
+  
   return taskData;
 }
 
 // Update task status
-async function updateTaskStatus(taskId, newStatus, message = null) {
+async function updateTaskStatus(taskId, newStatus, options = {}) {
+  const { message = null, output = null } = options;
+  
   // Find which agent owns this task
   const agentIds = ['badger-1', 'ratchet', 'test'];
   
@@ -283,16 +309,91 @@ async function updateTaskStatus(taskId, newStatus, message = null) {
       }
       
       // Store output if provided
-      if (task.output) {
-        task.output = { ...task.output, ...task.output };
+      if (output) {
+        task.output = output;
       }
       
       await redisClient.hSet(`tasks:${agentId}`, taskId, JSON.stringify(task));
+      
+      // Send callback notification if configured
+      if (task.callback && (newStatus === TASK_STATES.COMPLETED || newStatus === TASK_STATES.FAILED)) {
+        sendTaskCallback(task, newStatus);
+      }
+      
+      // If resultFor is set, notify that agent
+      if (task.resultFor && (newStatus === TASK_STATES.COMPLETED || newStatus === TASK_STATES.FAILED)) {
+        await notifyTaskResult(task, agentId);
+      }
+      
+      console.log(`Task ${taskId} status: ${newStatus}`);
       return task;
     }
   }
   
   return null;
+}
+
+// Send callback webhook for task completion
+async function sendTaskCallback(task, finalStatus) {
+  if (!task.callback) return;
+  
+  try {
+    const webhookConfig = agentWebhooks.get(task.resultFor || task.createdBy);
+    const token = webhookConfig?.token;
+    
+    await axios.post(task.callback, {
+      taskId: task.taskId,
+      type: task.type,
+      status: finalStatus,
+      input: task.input,
+      output: task.output,
+      createdBy: task.createdBy,
+      completedAt: task.completedAt,
+      source: 'a2a-bridge'
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'X-OpenClaw-Token': token } : {})
+      },
+      timeout: 10000
+    });
+    
+    console.log(`Task callback sent for ${task.taskId} to ${task.callback}`);
+  } catch (err) {
+    console.error(`Task callback failed for ${task.taskId}:`, err.message);
+  }
+}
+
+// Notify agent of task result
+async function notifyTaskResult(task, fromAgentId) {
+  const recipientId = task.resultFor;
+  if (!recipientId || recipientId === fromAgentId) return;
+  
+  const message = {
+    messageId: uuidv4(),
+    timestamp: new Date().toISOString(),
+    from: fromAgentId,
+    to: recipientId,
+    type: 'task_result',
+    content: {
+      text: `Task ${task.type}:${task.taskId.substring(0,8)} ${task.status}`,
+      taskId: task.taskId,
+      taskType: task.type,
+      status: task.status,
+      output: task.output,
+      input: task.input
+    },
+    threadId: null,
+    parentMessageId: null
+  };
+  
+  await redisClient.lPush(`messages:${recipientId}`, JSON.stringify(message));
+  await redisClient.lPush('messages:all', JSON.stringify(message));
+  await redisClient.lTrim(`messages:${recipientId}`, 0, 999);
+  await redisClient.lTrim('messages:all', 0, 999);
+  
+  // Try to deliver via WebSocket or webhook
+  await deliverMessage(message);
 }
 
 // ==================== PUSH NOTIFICATIONS ====================
@@ -634,17 +735,52 @@ app.delete('/auth/keys/:agentId', async (req, res) => {
 // POST /tasks - Create a new task
 app.post('/tasks', authenticate, async (req, res) => {
   try {
-    const { agentId, input, metadata, createdBy } = req.body;
+    const { 
+      agentId, 
+      input, 
+      metadata, 
+      createdBy,
+      type,           // research|synthesis|action|message|witness
+      priority,       // high|normal|low
+      callback,       // webhook URL for completion notification
+      deadline,       // ISO timestamp
+      dependencies,   // array of taskIds to wait for
+      resultFor       // agentId to send result to
+    } = req.body;
     
     if (!agentId) {
       return res.status(400).json({ error: 'agentId required' });
+    }
+    
+    // Validate task type
+    const validTypes = Object.values(TASK_TYPES);
+    if (type && !validTypes.includes(type)) {
+      return res.status(400).json({ 
+        error: 'Invalid task type',
+        validTypes
+      });
+    }
+    
+    // Validate priority
+    const validPriorities = Object.values(TASK_PRIORITY);
+    if (priority && !validPriorities.includes(priority)) {
+      return res.status(400).json({ 
+        error: 'Invalid priority',
+        validPriorities
+      });
     }
     
     const task = await createTask({
       agentId,
       input,
       metadata,
-      createdBy: createdBy || req.authenticatedAgent
+      createdBy: createdBy || req.authenticatedAgent,
+      type,
+      priority,
+      callback,
+      deadline,
+      dependencies,
+      resultFor
     });
     
     res.json({ success: true, task });
@@ -712,16 +848,11 @@ app.put('/tasks/:agentId/:taskId/status', authenticate, async (req, res) => {
       });
     }
     
-    const task = await updateTaskStatus(taskId, status, message);
+    // Pass output in options object
+    const task = await updateTaskStatus(taskId, status, { message, output });
     
     if (!task) {
       return res.status(404).json({ error: 'Task not found' });
-    }
-    
-    // Add output if provided
-    if (output) {
-      task.output = output;
-      await redisClient.hSet(`tasks:${agentId}`, taskId, JSON.stringify(task));
     }
     
     res.json({ success: true, task });
