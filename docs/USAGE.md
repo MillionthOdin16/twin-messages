@@ -10,10 +10,12 @@ Send messages, wake your twin, handle failures.
 
 | Task | Command |
 |------|---------|
-| **Send message** | `a2a_send "from" "to" "message"` |
-| **Check messages** | `a2a_poll "agent"` |
-| **Wake twin** | `a2a_wake "agent"` |
-| **Smart send** | `a2a_smart_send "from" "to" "message"` |
+| **Send message** | `~/.twin/scripts/a2a-send.sh --to agent "message"` |
+| **Check messages** | `curl https://a2a-api.bradarr.com/messages/your-id` |
+| **Wake twin** | `curl -X POST http://ip:18789/hooks/wake -d '{"text":"msg"}'` |
+| **Create task** | `POST /tasks` with API key |
+| **Check tasks** | `curl -H "X-API-Key: $KEY" /tasks/your-id` |
+| **Health check** | `curl https://a2a-api.bradarr.com/health` |
 
 ---
 
@@ -114,6 +116,45 @@ source ~/.twin/scripts/a2a-bridge-client.sh
 a2a_send "from" "to" "message"
 a2a_poll "agent"
 a2a_health
+```
+
+---
+
+## Tasks
+
+### Create a Task
+
+```bash
+curl -X POST https://a2a-api.bradarr.com/tasks \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $A2A_API_KEY" \
+  -d '{
+    "agentId": "ratchet",
+    "type": "action",
+    "input": {"description": "Build X"},
+    "priority": "high"
+  }'
+```
+
+### Check Your Tasks
+
+```bash
+curl -H "X-API-Key: $A2A_API_KEY" \
+  https://a2a-api.bradarr.com/tasks/your-agent-id
+```
+
+### Update Task Status
+
+```bash
+# Working
+curl -X PUT https://a2a-api.bradarr.com/tasks/your-agent-id/task-id/status \
+  -H "X-API-Key: $A2A_API_KEY" \
+  -d '{"state": "working"}'
+
+# Completed
+curl -X PUT https://a2a-api.bradarr.com/tasks/your-agent-id/task-id/status \
+  -H "X-API-Key: $A2A_API_KEY" \
+  -d '{"state": "completed"}'
 ```
 
 ---
