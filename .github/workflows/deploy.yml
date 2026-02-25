@@ -1,0 +1,19 @@
+name: Deploy to Coolify
+
+on:
+  push:
+    branches: [compose-feature]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy A2A Bridge API
+        run: |
+          curl -sX POST "https://coolify.bradarr.com/api/v1/deploy?uuid=${{ secrets.COOLIFY_API_UUID }}&force=true" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_API_TOKEN }}" | jq '.'
+
+      - name: Deploy A2A Bridge Web
+        run: |
+          curl -sX POST "https://coolify.bradarr.com/api/v1/deploy?uuid=${{ secrets.COOLIFY_WEB_UUID }}&force=true" \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_API_TOKEN }}" | jq '.'

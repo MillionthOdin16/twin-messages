@@ -98,38 +98,35 @@ ENV NODE_OPTIONS="--max-old-space-size=512"
 
 ### Enable Auto-Deploy
 
-**Status:** ⚠️ Partially configured for twin-messages (Cloudflare blocking)
+**Status:** ✅ Now configured via GitHub Actions
 
 **Setup:**
-```bash
-# GitHub webhook created via API
-gh api repos/MillionthOdin16/twin-messages/hooks \
-  --method POST \
-  --input webhook.json
-```
 
-**Webhook URL:** `https://coolify.bradarr.com/webhooks/deploy/<project-uuid>/<environment-uuid>`
+1. **Create GitHub Secrets** (in repo settings)
+   ```
+   COOLIFY_API_TOKEN = 6|ShyBUVU2l9GG7jjjIyRObXNPUVxOqPMarcMWgjDf9c36076b
+   COOLIFY_API_UUID  = go88skoswkkkw8w4os0c0ksc
+   COOLIFY_WEB_UUID  = d0ssso4k44gw0gc4w4k48w00
+   ```
+
+2. **GitHub Actions workflow** (`.github/workflows/deploy.yml`)
+   - Triggers on push to `compose-feature`
+   - Deploys both API and Web containers
+   - Uses Coolify API with authentication
+
+**Why not webhooks?**
+- Coolify webhooks require signatures (not just UUIDs)
+- API approach is more secure and reliable
+- Works through Cloudflare without special rules
 
 **To verify:**
 ```bash
-gh api repos/MillionthOdin16/twin-messages/hooks | jq '.[].active'
+# Check Actions tab on GitHub
+gh workflow view deploy --repo MillionthOdin16/twin-messages
+
+# Or check recent runs
+gh run list --repo MillionthOdin16/twin-messages
 ```
-
-**Known Issue:** If using Cloudflare, webhooks may be blocked (302 redirect). Solutions:
-1. Create Cloudflare page rule: Disable security for `*/webhooks/deploy/*`
-2. Whitelist GitHub webhook IPs
-3. Use GitHub Actions with Coolify API token instead
-
-**Benefits:**
-- Deploy on every push
-- No manual intervention
-- Faster iteration
-
----
-
-### Manual Webhook Configuration
-
-If setting up manually:
 
 ## 5. Redis Best Practices
 

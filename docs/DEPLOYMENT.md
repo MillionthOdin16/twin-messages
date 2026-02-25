@@ -229,69 +229,56 @@ coolify database restart ocsscsw4wowscgs4goc04sgs
 
 ---
 
-## Auto-Deploy Setup (GitHub Webhook)
+## Auto-Deploy Setup (GitHub Actions)
 
-**Status:** ⚠️ Partially configured
+**Status:** ✅ Configured
 
-### Webhook Created
+### How It Works
 
-```bash
-# GitHub webhook configured via API
-gh api repos/MillionthOdin16/twin-messages/hooks/597972519
+GitHub Actions triggers on every push to `compose-feature`:
+
+```yaml
+on:
+  push:
+    branches: [compose-feature]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy API
+        run: |
+          curl -sX POST "https://coolify.bradarr.com/api/v1/deploy?uuid=$API_UUID&force=true" \
+            -H "Authorization: Bearer $COOLIFY_TOKEN"
+      
+      - name: Deploy Web
+        run: |
+          curl -sX POST "https://coolify.bradarr.com/api/v1/deploy?uuid=$WEB_UUID&force=true" \
+            -H "Authorization: Bearer $COOLIFY_TOKEN"
 ```
 
-| Setting | Value |
-|---------|-------|
-| Webhook ID | 597972519 |
-| URL | `https://coolify.bradarr.com/webhooks/deploy/<project-uuid>/<environment-uuid>` |
-| Events | Push |
-| Scope | Project-level (both API + Web) |
-| Status | Active |
+### Required GitHub Secrets
 
-**Both apps will auto-deploy:**
-- a2a-bridge-api (Port 3000)
-- a2a-bridge-web (Port 3000)
+| Secret | Value | Get From |
+|--------|-------|----------|
+| `COOLIFY_API_TOKEN` | `6|ShyBUVU2l9GG7jjjIyRObXNPUVxOqPMarcMWgjDf9c36076b` | Coolify UI → API Tokens |
+| `COOLIFY_API_UUID` | `go88skoswkkkw8w4os0c0ksc` | `coolify app list` |
+| `COOLIFY_WEB_UUID` | `d0ssso4k44gw0gc4w4k48w00` | `coolify app list` |
 
-### Known Issue: Cloudflare Blocking
+### Why Not Webhooks?
 
-The webhook receives `302 Redirect` responses due to Cloudflare security rules.
+**Attempted:**
+- GitHub webhook with Coolify webhook URL → 302 (requires auth)
+- Cloudflare Page Rule with `disable_security` → Page Rule created but webhook still requires Coolify auth
+- Cloudflare Page Rule with `security_level: essentially_off` → Same result
 
-**Workarounds:**
+**Root cause:** Coolify webhooks require signatures (not just UUIDs). The API approach is more reliable.
 
-1. **Manual Deploy** (Current)
-   ```bash
-   coolify deploy name a2a-bridge-api --force
-   coolify deploy name a2a-bridge-web --force
-   ```
-
-2. **Cloudflare Page Rule** (To implement)
-   - Path: `*/webhooks/deploy/*`
-   - Setting: Disable Security Features
-   - Or: Add GitHub webhook IPs to whitelist
-
-3. **GitHub Actions** (Alternative)
-   ```yaml
-   # .github/workflows/deploy.yml
-   on:
-     push:
-       branches: [compose-feature]
-   jobs:
-     deploy:
-       runs-on: ubuntu-latest
-       steps:
-         - run: |
-             curl -X POST "$COOLIFY_WEBHOOK_URL" \
-               -H "Authorization: Bearer $COOLIFY_TOKEN"
-   ```
-
-### Verify Webhook Status
+### Manual Deploy (Fallback)
 
 ```bash
-# Check webhook
-gh api repos/MillionthOdin16/twin-messages/hooks/597972519 | jq '.active'
-
-# Check recent deliveries
-gh api repos/MillionthOdin16/twin-messages/hooks/597972519/deliveries | jq '.[].status'
+coolify deploy name a2a-bridge-api --force
+coolify deploy name a2a-bridge-web --force
 ```
 
 ---
