@@ -1392,7 +1392,7 @@ app.get('/messages/search', async (req, res) => {
     messages = messages.slice(0, parseInt(limit));
     
     res.json({
-      apiVersion: '2.2.0-search',
+      apiVersion: '2.1.0',
       messages,
       total: messages.length,
       searchParams: { q, from, to },
