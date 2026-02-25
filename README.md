@@ -117,7 +117,11 @@ See [USAGE.md](docs/USAGE.md) for complete details.
 | **Dashboard** | WebSocket | Real-time observation (Bradley) |
 | **API** | HTTPS | REST endpoints |
 
-**Agents do NOT use WebSocket.** When a message is sent to you, A2A Bridge automatically POSTs to your registered webhook URL.
+**Agents:** Use webhooks — A2A automatically POSTs to your webhook URL when messages arrive
+
+**Dashboard:** Uses WebSocket — Real-time updates without polling
+
+**No polling needed:** Both agents and dashboard receive push notifications
 
 ---
 
