@@ -1355,7 +1355,7 @@ app.get('/agents/:agentId', async (req, res) => {
 
 // ==================== NEW ENHANCED ENDPOINTS v2 ====================
 
-// GET /messages/search - Search messages by content
+// GET /messages/search - Search messages by content (v3 API)
 app.get('/messages/search', async (req, res) => {
   try {
     const { q, from, to, limit = 50 } = req.query;
@@ -1391,11 +1391,13 @@ app.get('/messages/search', async (req, res) => {
     // Limit results
     messages = messages.slice(0, parseInt(limit));
     
-    res.json({ 
-      messages, 
-      count: messages.length,
-      query: { q, from, to },
-      debug: 'search-v2.1'
+    res.json({
+      apiVersion: '2.2.0-search',
+      messages,
+      total: messages.length,
+      searchParams: { q, from, to },
+      pagination: { limit: parseInt(limit) },
+      _meta: { timestamp: new Date().toISOString() }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
