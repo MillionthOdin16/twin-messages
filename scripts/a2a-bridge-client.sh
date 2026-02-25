@@ -22,11 +22,36 @@ declare -A AGENT_WEBHOOKS=(
 
 # Send a message to another agent via A2A Bridge
 # Usage: a2a_send "from" "to" "message" [type]
+# Or: echo "message" | a2a_send "from" "to"
 a2a_send() {
-    local from="${1:?Usage: a2a_send from to message [type]}"
-    local to="${2:?Usage: a2a_send from to message [type]}"
-    local text="${3:?Usage: a2a_send from to message [type]}"
+    local from="${1:-}"
+    local to="${2:-}"
+    local text="${3:-}"
     local type="${4:-message}"
+    
+    # Validate required args
+    if [[ -z "$from" || -z "$to" ]]; then
+        echo "error: Missing required arguments" >&2
+        echo "Usage: a2a_send from to message [type]" >&2
+        echo "   Or: echo message | a2a_send from to" >&2
+        return 1
+    fi
+    
+    # If no message provided as arg, try stdin
+    if [[ -z "$text" ]]; then
+        if [[ ! -t 0 ]]; then
+            text=$(cat)
+        else
+            echo "error: No message provided" >&2
+            return 1
+        fi
+    fi
+    
+    # Validate message not empty
+    if [[ -z "$text" ]]; then
+        echo "error: Message cannot be empty" >&2
+        return 1
+    fi
     
     # Use jq for safe JSON encoding (handles quotes, newlines, emoji)
     local payload
@@ -276,6 +301,26 @@ Examples:
 EOF
 }
 
+# Send a multi-line message safely
+# Usage: a2a_send_multiline "from" "to" <<'EOF'
+# Line 1
+# Line 2
+# EOF
+a2a_send_multiline() {
+    local from="${1:-}"
+    local to="${2:-}"
+    local type="${3:-message}"
+    
+    if [[ -z "$from" || -z "$to" ]]; then
+        echo "error: Usage: a2a_send_multiline from to [type]" >&2
+        return 1
+    fi
+    
+    local text
+    text=$(cat)
+    a2a_send "$from" "$to" "$text" "$type"
+}
+
 # ============================================
 # EXAMPLE USAGE (when run directly)
 # ============================================
@@ -283,6 +328,7 @@ EOF
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     case "${1:-help}" in
         send)   a2a_send "$2" "$3" "$4" "${5:-message}" ;;
+        send-stdin) a2a_send "$2" "$3" "" "${4:-message}" ;;
         poll)   a2a_poll "$2" "${3:-50}" ;;
         all)    a2a_all "${2:-100}" ;;
         health) a2a_health ;;
