@@ -25,6 +25,105 @@ redisSubscriber.on('error', (err) => console.error('Redis Sub Error', err));
 redisClient.connect();
 redisSubscriber.connect();
 
+// ==================== AUTHENTICATION ====================
+
+// API keys store: Map<agentId, apiKey>
+const apiKeys = new Map();
+
+// Agent cards store: Map<agentId, AgentCard>
+const agentCards = new Map();
+
+// Default Agent Card template
+function createDefaultAgentCard(agentId) {
+  return {
+    agentId,
+    name: agentId,
+    description: `Agent ${agentId}`,
+    url: null,
+    version: '1.0.0',
+    capabilities: {
+      streaming: true,
+      pushNotifications: true,
+      tasks: true,
+      messages: true,
+      agentCards: true
+    },
+    authentication: {
+      schemes: ['Bearer', 'X-API-Key']
+    },
+    defaultInputModes: ['text'],
+    defaultOutputModes: ['text'],
+    skills: [],
+    status: 'offline',
+    lastActivity: null
+  };
+}
+
+// Initialize default agent cards
+function initializeAgentCards() {
+  ['badger-1', 'ratchet', 'test'].forEach(agentId => {
+    if (!agentCards.has(agentId)) {
+      agentCards.set(agentId, createDefaultAgentCard(agentId));
+    }
+  });
+}
+
+// Authentication middleware
+function authenticate(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const apiKeyHeader = req.headers['x-api-key'];
+  
+  // Check Bearer token (webhook token)
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    // Find agent with matching token
+    for (const [agentId, config] of agentWebhooks.entries()) {
+      if (config && config.token === token) {
+        req.authenticatedAgent = agentId;
+        return next();
+      }
+    }
+  }
+  
+  // Check X-API-Key header
+  if (apiKeyHeader) {
+    for (const [agentId, key] of apiKeys.entries()) {
+      if (key === apiKeyHeader) {
+        req.authenticatedAgent = agentId;
+        return next();
+      }
+    }
+  }
+  
+  // Check query parameter (less secure, but convenient for testing)
+  if (req.query.apiKey) {
+    for (const [agentId, key] of apiKeys.entries()) {
+      if (key === req.query.apiKey) {
+        req.authenticatedAgent = agentId;
+        return next();
+      }
+    }
+  }
+  
+  // Optional auth - allow if no keys registered, otherwise require auth
+  if (apiKeys.size === 0 && agentWebhooks.size === 0) {
+    return next();
+  }
+  
+  res.status(401).json({ 
+    error: 'Unauthorized', 
+    message: 'Valid API key or Bearer token required',
+    hint: 'Use X-API-Key header or Bearer token'
+  });
+}
+
+// Generate new API key for agent
+function generateApiKey(agentId) {
+  const key = `a2a_${agentId}_${uuidv4().replace(/-/g, '')}`;
+  apiKeys.set(agentId, key);
+  return key;
+}
+
 // Connected agents: Map<agentId, WebSocket>
 const connectedAgents = new Map();
 
@@ -63,7 +162,34 @@ async function loadWebhooks() {
     console.error('Error loading webhooks from Redis:', err);
   }
   
+  // Load API keys from Redis
+  try {
+    const keys = await redisClient.hGetAll('a2a:apikeys');
+    for (const [agentId, key] of Object.entries(keys)) {
+      apiKeys.set(agentId, key);
+    }
+  } catch (err) {
+    console.error('Error loading API keys from Redis:', err);
+  }
+  
+  // Load Agent Cards from Redis
+  try {
+    const cards = await redisClient.hGetAll('a2a:agentcards');
+    for (const [agentId, cardJson] of Object.entries(cards)) {
+      try {
+        agentCards.set(agentId, JSON.parse(cardJson));
+      } catch (e) {
+        console.error('Error parsing agent card:', e);
+      }
+    }
+  } catch (err) {
+    console.error('Error loading agent cards from Redis:', err);
+  }
+  
+  initializeAgentCards();
   console.log('Loaded webhooks:', Array.from(agentWebhooks.keys()));
+  console.log('Loaded API keys:', Array.from(apiKeys.keys()));
+  console.log('Loaded agent cards:', Array.from(agentCards.keys()));
 }
 
 // Initialize server after Redis connects
@@ -72,14 +198,105 @@ async function init() {
   
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => {
-    console.log(`A2A Bridge V3 (with Push Notifications) running on port ${PORT}`);
-    console.log(`Features: WebSocket + Webhook Push`);
+    console.log(`A2A Bridge V3 (Auth + Tasks + AgentCards) running on port ${PORT}`);
+    console.log(`Features: WebSocket + Webhook Push + Authentication + Tasks`);
   });
 }
 
 init().catch(console.error);
 
-// Push notification function
+// ==================== TASK MANAGEMENT ====================
+
+// Task states: submitted → working → completed/failed/canceled
+const TASK_STATES = {
+  SUBMITTED: 'submitted',
+  WORKING: 'working',
+  INPUT_REQUIRED: 'input-required',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  CANCELED: 'canceled',
+  REJECTED: 'rejected'
+};
+
+// Create a new task
+async function createTask(task) {
+  const taskId = uuidv4();
+  const now = new Date().toISOString();
+  
+  const taskData = {
+    taskId,
+    agentId: task.agentId,
+    status: TASK_STATES.SUBMITTED,
+    createdAt: now,
+    updatedAt: now,
+    submittedAt: now,
+    createdBy: task.createdBy || 'unknown',
+    input: task.input || {},
+    output: null,
+    history: [
+      {
+        state: TASK_STATES.SUBMITTED,
+        timestamp: now,
+        message: 'Task submitted'
+      }
+    ],
+    metadata: task.metadata || {}
+  };
+  
+  // Store in Redis
+  await redisClient.hSet(`tasks:${task.agentId}`, taskId, JSON.stringify(taskData));
+  await redisClient.zAdd('tasks:all', { score: Date.now(), value: taskId });
+  
+  return taskData;
+}
+
+// Update task status
+async function updateTaskStatus(taskId, newStatus, message = null) {
+  // Find which agent owns this task
+  const agentIds = ['badger-1', 'ratchet', 'test'];
+  
+  for (const agentId of agentIds) {
+    const taskJson = await redisClient.hGet(`tasks:${agentId}`, taskId);
+    if (taskJson) {
+      const task = JSON.parse(taskJson);
+      const now = new Date().toISOString();
+      
+      task.status = newStatus;
+      task.updatedAt = now;
+      
+      // Add to history
+      task.history.push({
+        state: newStatus,
+        timestamp: now,
+        message: message || `Status changed to ${newStatus}`
+      });
+      
+      // Set completion time
+      if (newStatus === TASK_STATES.COMPLETED || 
+          newStatus === TASK_STATES.FAILED || 
+          newStatus === TASK_STATES.CANCELED) {
+        task.completedAt = now;
+      }
+      
+      if (newStatus === TASK_STATES.WORKING && !task.startedAt) {
+        task.startedAt = now;
+      }
+      
+      // Store output if provided
+      if (task.output) {
+        task.output = { ...task.output, ...task.output };
+      }
+      
+      await redisClient.hSet(`tasks:${agentId}`, taskId, JSON.stringify(task));
+      return task;
+    }
+  }
+  
+  return null;
+}
+
+// ==================== PUSH NOTIFICATIONS ====================
+
 async function pushNotification(agentId, message) {
   const webhookConfig = agentWebhooks.get(agentId);
   if (!webhookConfig) {
@@ -96,7 +313,6 @@ async function pushNotification(agentId, message) {
       'X-A2A-Source': 'a2a-bridge'
     };
     
-    // Add Authorization header if token provided
     if (webhookToken) {
       headers['X-OpenClaw-Token'] = webhookToken;
     }
@@ -121,11 +337,9 @@ async function pushNotification(agentId, message) {
   }
 }
 
-// Deliver message to recipient (WebSocket or Push)
 async function deliverMessage(message) {
   const recipientId = message.to;
   
-  // Try WebSocket first
   const ws = connectedAgents.get(recipientId);
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({
@@ -136,18 +350,16 @@ async function deliverMessage(message) {
     return { delivered: true, method: 'websocket', timestamp: new Date().toISOString() };
   }
   
-  // Fallback to push notification
   console.log(`${recipientId} not connected via WebSocket, trying push notification...`);
   const result = await pushNotification(recipientId, message);
   
-  // Store notification timestamp
   if (result.notified) {
     await redisClient.hSet(`notifications:${message.messageId}`, recipientId, JSON.stringify({
       notified: true,
       method: 'webhook',
       timestamp: new Date().toISOString()
     }));
-    await redisClient.expire(`notifications:${message.messageId}`, 86400); // 24h expiry
+    await redisClient.expire(`notifications:${message.messageId}`, 86400);
   }
   
   return result;
@@ -158,24 +370,53 @@ wss.on('connection', (ws, req) => {
   const parsedUrl = url.parse(req.url, true);
   const agentId = parsedUrl.query.agentId || req.headers['x-agent-id'];
   const token = parsedUrl.query.token || req.headers['authorization']?.replace('Bearer ', '');
+  const apiKey = parsedUrl.query.apiKey || req.headers['x-api-key'];
   
   if (!agentId) {
     ws.close(1008, 'Agent ID required');
     return;
   }
   
-  // Verify token if agent has registered webhook
+  // Verify token or API key
+  let authenticated = false;
+  
+  // Check webhook token
   const webhookConfig = agentWebhooks.get(agentId);
   if (webhookConfig && webhookConfig.token) {
-    if (!token || token !== webhookConfig.token) {
-      console.log(`WebSocket auth failed for ${agentId}: invalid token`);
-      ws.close(1008, 'Invalid token');
-      return;
+    if (token && token === webhookConfig.token) {
+      authenticated = true;
     }
+  }
+  
+  // Check API key
+  if (!authenticated && apiKey) {
+    if (apiKeys.get(agentId) === apiKey) {
+      authenticated = true;
+    }
+  }
+  
+  // Allow if no auth configured
+  if (!authenticated && apiKeys.size === 0 && (!webhookConfig || !webhookConfig.token)) {
+    authenticated = true;
+  }
+  
+  if (!authenticated) {
+    console.log(`WebSocket auth failed for ${agentId}: invalid token/apiKey`);
+    ws.close(1008, 'Invalid token or API key');
+    return;
   }
   
   console.log(`Agent connected: ${agentId} (authenticated)`);
   connectedAgents.set(agentId, ws);
+  
+  // Update agent card status
+  const card = agentCards.get(agentId);
+  if (card) {
+    card.status = 'online';
+    card.lastActivity = new Date().toISOString();
+    card.websocketUrl = `wss://a2a-api.bradarr.com?agentId=${agentId}`;
+    agentCards.set(agentId, card);
+  }
   
   ws.send(JSON.stringify({
     type: 'connected',
@@ -186,6 +427,14 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => {
     console.log(`Agent disconnected: ${agentId}`);
     connectedAgents.delete(agentId);
+    
+    // Update agent card status
+    const card = agentCards.get(agentId);
+    if (card) {
+      card.status = 'offline';
+      card.lastActivity = new Date().toISOString();
+      agentCards.set(agentId, card);
+    }
   });
   
   ws.on('message', async (data) => {
@@ -208,13 +457,11 @@ wss.on('connection', (ws, req) => {
         parentMessageId: message.parentMessageId || null
       };
       
-      // Store in Redis
       await redisClient.lPush(`messages:${message.to}`, JSON.stringify(enrichedMessage));
       await redisClient.lPush('messages:all', JSON.stringify(enrichedMessage));
       await redisClient.lTrim(`messages:${message.to}`, 0, 999);
       await redisClient.lTrim('messages:all', 0, 999);
       
-      // Deliver to recipient
       const delivery = await deliverMessage(enrichedMessage);
       
       ws.send(JSON.stringify({
@@ -230,7 +477,7 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-// HTTP API Routes
+// ==================== HTTP API ROUTES ====================
 
 // POST /messages - Send message (with automatic push)
 app.post('/messages', async (req, res) => {
@@ -246,13 +493,11 @@ app.post('/messages', async (req, res) => {
       parentMessageId: req.body.parentMessageId || null
     };
     
-    // Store in Redis
     await redisClient.lPush(`messages:${message.to}`, JSON.stringify(message));
     await redisClient.lPush('messages:all', JSON.stringify(message));
     await redisClient.lTrim(`messages:${message.to}`, 0, 999);
     await redisClient.lTrim('messages:all', 0, 999);
     
-    // Deliver to recipient
     const delivery = await deliverMessage(message);
     
     res.json({ 
@@ -275,7 +520,6 @@ app.post('/webhooks/register', async (req, res) => {
       return res.status(400).json({ error: 'agentId and webhookUrl required' });
     }
     
-    // Validate webhook URL
     try {
       new URL(webhookUrl);
     } catch {
@@ -288,8 +532,6 @@ app.post('/webhooks/register', async (req, res) => {
     };
     
     agentWebhooks.set(agentId, webhookConfig);
-    
-    // Persist to Redis (store as JSON to include token)
     await redisClient.hSet('a2a:webhooks', agentId, JSON.stringify(webhookConfig));
     
     console.log(`Webhook registered for ${agentId}: ${webhookUrl}`);
@@ -308,7 +550,6 @@ app.post('/webhooks/register', async (req, res) => {
 app.get('/webhooks/:agentId', (req, res) => {
   const webhookConfig = agentWebhooks.get(req.params.agentId);
   if (webhookConfig) {
-    // Don't return the actual token, just whether it exists
     res.json({ 
       agentId: req.params.agentId, 
       webhookUrl: webhookConfig.url || webhookConfig,
@@ -325,6 +566,264 @@ app.delete('/webhooks/:agentId', async (req, res) => {
   await redisClient.hDel('a2a:webhooks', req.params.agentId);
   res.json({ success: true });
 });
+
+// ==================== API KEY MANAGEMENT ====================
+
+// POST /auth/keys - Generate new API key for agent
+app.post('/auth/keys', async (req, res) => {
+  try {
+    const { agentId } = req.body;
+    
+    if (!agentId) {
+      return res.status(400).json({ error: 'agentId required' });
+    }
+    
+    // Check if key already exists
+    const existingKey = apiKeys.get(agentId);
+    if (existingKey) {
+      return res.json({ 
+        success: true, 
+        agentId, 
+        apiKey: existingKey,
+        existing: true
+      });
+    }
+    
+    const newKey = generateApiKey(agentId);
+    
+    // Store in Redis
+    await redisClient.hSet('a2a:apikeys', agentId, newKey);
+    
+    res.json({ 
+      success: true, 
+      agentId, 
+      apiKey: newKey,
+      hint: 'Use X-API-Key header or ?apiKey= query parameter'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /auth/keys/:agentId - Get API key info (not the key itself)
+app.get('/auth/keys/:agentId', (req, res) => {
+  const key = apiKeys.get(req.params.agentId);
+  if (key) {
+    res.json({ 
+      agentId: req.params.agentId, 
+      hasApiKey: true,
+      hint: 'X-API-Key header or ?apiKey= query parameter'
+    });
+  } else {
+    res.json({ 
+      agentId: req.params.agentId, 
+      hasApiKey: false 
+    });
+  }
+});
+
+// DELETE /auth/keys/:agentId - Revoke API key
+app.delete('/auth/keys/:agentId', async (req, res) => {
+  apiKeys.delete(req.params.agentId);
+  await redisClient.hDel('a2a:apikeys', req.params.agentId);
+  res.json({ success: true, message: 'API key revoked' });
+});
+
+// ==================== TASK MANAGEMENT ENDPOINTS ====================
+
+// POST /tasks - Create a new task
+app.post('/tasks', authenticate, async (req, res) => {
+  try {
+    const { agentId, input, metadata, createdBy } = req.body;
+    
+    if (!agentId) {
+      return res.status(400).json({ error: 'agentId required' });
+    }
+    
+    const task = await createTask({
+      agentId,
+      input,
+      metadata,
+      createdBy: createdBy || req.authenticatedAgent
+    });
+    
+    res.json({ success: true, task });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /tasks/:agentId - List tasks for agent
+app.get('/tasks/:agentId', authenticate, async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { status, limit = 50 } = req.query;
+    
+    const tasksJson = await redisClient.hGetAll(`tasks:${agentId}`);
+    let tasks = Object.values(tasksJson).map(t => JSON.parse(t));
+    
+    // Filter by status if specified
+    if (status) {
+      tasks = tasks.filter(t => t.status === status);
+    }
+    
+    // Sort by createdAt descending
+    tasks.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    // Limit
+    tasks = tasks.slice(0, parseInt(limit));
+    
+    res.json({ tasks, count: tasks.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /tasks/:agentId/:taskId - Get specific task
+app.get('/tasks/:agentId/:taskId', authenticate, async (req, res) => {
+  try {
+    const { agentId, taskId } = req.params;
+    
+    const taskJson = await redisClient.hGet(`tasks:${agentId}`, taskId);
+    if (!taskJson) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    res.json({ task: JSON.parse(taskJson) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /tasks/:agentId/:taskId/status - Update task status
+app.put('/tasks/:agentId/:taskId/status', authenticate, async (req, res) => {
+  try {
+    const { agentId, taskId } = req.params;
+    const { status, message, output } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({ error: 'status required' });
+    }
+    
+    if (!Object.values(TASK_STATES).includes(status)) {
+      return res.status(400).json({ 
+        error: 'Invalid status',
+        validStatuses: Object.values(TASK_STATES)
+      });
+    }
+    
+    const task = await updateTaskStatus(taskId, status, message);
+    
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    // Add output if provided
+    if (output) {
+      task.output = output;
+      await redisClient.hSet(`tasks:${agentId}`, taskId, JSON.stringify(task));
+    }
+    
+    res.json({ success: true, task });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /tasks/:agentId/:taskId/cancel - Cancel a task
+app.post('/tasks/:agentId/:taskId/cancel', authenticate, async (req, res) => {
+  try {
+    const { agentId, taskId } = req.params;
+    
+    const task = await updateTaskStatus(taskId, TASK_STATES.CANCELED, 'Task cancelled by user');
+    
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    res.json({ success: true, task });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== AGENT CARDS ====================
+
+// POST /agents/:agentId/card - Update agent card
+app.post('/agents/:agentId/card', authenticate, async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const updates = req.body;
+    
+    const existingCard = agentCards.get(agentId) || createDefaultAgentCard(agentId);
+    
+    // Merge updates
+    const updatedCard = {
+      ...existingCard,
+      ...updates,
+      agentId, // Ensure agentId can't be changed
+      updatedAt: new Date().toISOString()
+    };
+    
+    agentCards.set(agentId, updatedCard);
+    
+    // Persist to Redis
+    await redisClient.hSet('a2a:agentcards', agentId, JSON.stringify(updatedCard));
+    
+    res.json({ success: true, agentCard: updatedCard });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /agents/:agentId/card - Get agent card
+app.get('/agents/:agentId/card', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    let card = agentCards.get(agentId);
+    
+    // If no card exists, create default
+    if (!card) {
+      card = createDefaultAgentCard(agentId);
+      agentCards.set(agentId, card);
+    }
+    
+    // Add live status
+    const isConnected = connectedAgents.has(agentId);
+    const webhookConfig = agentWebhooks.get(agentId);
+    
+    card.status = isConnected ? 'online' : (webhookConfig ? 'available' : 'offline');
+    card.lastActivity = card.lastActivity || new Date().toISOString();
+    
+    res.json({ agentCard: card });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /agents/cards - List all agent cards
+app.get('/agents/cards', async (req, res) => {
+  try {
+    const cards = [];
+    
+    for (const [agentId, card] of agentCards.entries()) {
+      const isConnected = connectedAgents.has(agentId);
+      const webhookConfig = agentWebhooks.get(agentId);
+      
+      cards.push({
+        ...card,
+        status: isConnected ? 'online' : (webhookConfig ? 'available' : 'offline')
+      });
+    }
+    
+    res.json({ agents: cards, count: cards.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== MESSAGE ENDPOINTS ====================
 
 // GET /messages/:agentId - Poll for messages
 app.get('/messages/:agentId', async (req, res) => {
@@ -364,7 +863,6 @@ app.post('/messages/:messageId/receipt', async (req, res) => {
       return res.status(400).json({ error: 'Invalid status. Use: delivered, read, failed' });
     }
     
-    // Store receipt in Redis
     const receipt = {
       messageId,
       agentId,
@@ -373,7 +871,7 @@ app.post('/messages/:messageId/receipt', async (req, res) => {
     };
     
     await redisClient.hSet(`receipts:${messageId}`, agentId, JSON.stringify(receipt));
-    await redisClient.expire(`receipts:${messageId}`, 86400); // 24 hour expiry
+    await redisClient.expire(`receipts:${messageId}`, 86400);
     
     console.log(`Delivery receipt: ${messageId} ${status} by ${agentId}`);
     res.json({ success: true, receipt });
@@ -387,7 +885,6 @@ app.get('/messages/:messageId/status', async (req, res) => {
   try {
     const { messageId } = req.params;
     
-    // Get receipts for this message
     const receipts = await redisClient.hGetAll(`receipts:${messageId}`);
     
     const parsedReceipts = {};
@@ -395,7 +892,6 @@ app.get('/messages/:messageId/status', async (req, res) => {
       parsedReceipts[agentId] = JSON.parse(receiptJson);
     }
     
-    // Get notification info
     const notifications = await redisClient.hGetAll(`notifications:${messageId}`);
     const parsedNotifications = {};
     for (const [agentId, notifJson] of Object.entries(notifications)) {
@@ -422,11 +918,9 @@ app.get('/messages/:agentId/undelivered', async (req, res) => {
     const { agentId } = req.params;
     const { limit = 50 } = req.query;
     
-    // Get all messages for this agent
     const messages = await redisClient.lRange(`messages:${agentId}`, 0, parseInt(limit) - 1);
     const parsedMessages = messages.map(m => JSON.parse(m));
     
-    // Filter to only undelivered (no receipt for this agent)
     const undelivered = [];
     for (const message of parsedMessages) {
       const receipt = await redisClient.hGet(`receipts:${message.messageId}`, agentId);
@@ -450,11 +944,9 @@ app.get('/messages/:agentId/stats', async (req, res) => {
   try {
     const { agentId } = req.params;
     
-    // Get all messages
     const messages = await redisClient.lRange(`messages:${agentId}`, 0, -1);
     const parsedMessages = messages.map(m => JSON.parse(m));
     
-    // Count delivered vs undelivered
     let delivered = 0;
     let undelivered = 0;
     let read = 0;
@@ -470,7 +962,6 @@ app.get('/messages/:agentId/stats', async (req, res) => {
       }
     }
     
-    // Get recent activity
     const lastMessage = parsedMessages[0];
     
     res.json({
@@ -487,20 +978,20 @@ app.get('/messages/:agentId/stats', async (req, res) => {
   }
 });
 
+// ==================== AGENT STATUS ====================
+
 // GET /agents/:agentId/status - Detailed agent status
 app.get('/agents/:agentId/status', async (req, res) => {
   try {
     const { agentId } = req.params;
     
-    // Check if connected via WebSocket
     const ws = connectedAgents.get(agentId);
     const isConnected = ws && ws.readyState === WebSocket.OPEN;
     
-    // Check webhook registration
     const webhookConfig = agentWebhooks.get(agentId);
     const hasWebhook = !!webhookConfig;
+    const hasApiKey = apiKeys.has(agentId);
     
-    // Get message stats
     const messages = await redisClient.lRange(`messages:${agentId}`, 0, -1);
     const parsedMessages = messages.map(m => JSON.parse(m));
     
@@ -515,7 +1006,12 @@ app.get('/agents/:agentId/status', async (req, res) => {
     
     res.json({
       agentId,
-      status: isConnected ? 'online' : 'offline',
+      status: isConnected ? 'online' : (hasWebhook ? 'available' : 'offline'),
+      connected: isConnected,
+      authentication: {
+        webhook: hasWebhook,
+        apiKey: hasApiKey
+      },
       websocket: {
         connected: isConnected
       },
@@ -548,7 +1044,8 @@ app.get('/agents', (req, res) => {
     connected: Array.from(connectedAgents.keys()),
     webhooks: webhookInfo,
     connectedCount: connectedAgents.size,
-    webhookCount: agentWebhooks.size
+    webhookCount: agentWebhooks.size,
+    apiKeyCount: apiKeys.size
   });
 });
 
@@ -561,12 +1058,14 @@ app.get('/health', async (req, res) => {
       redis: 'connected',
       websocket: 'enabled',
       pushNotifications: 'enabled',
+      authentication: 'enabled',
+      tasks: 'enabled',
+      agentCards: 'enabled',
       connectedAgents: connectedAgents.size,
-      registeredWebhooks: agentWebhooks.size
+      registeredWebhooks: agentWebhooks.size,
+      apiKeys: apiKeys.size
     });
   } catch (err) {
     res.status(500).json({ status: 'unhealthy', error: err.message });
   }
 });
-
-
