@@ -327,6 +327,8 @@
         let stats = {};
         let currentMsgFilter = 'all';
         let currentTaskFilter = 'all';
+        let ws = null;
+        let wsReconnectTimer = null;
         
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
@@ -347,6 +349,64 @@
             document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
         }
         
+        function connectWebSocket() {
+            const wsUrl = API_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+            ws = new WebSocket(`${wsUrl}/ws`);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                document.getElementById('status-text').textContent = 'Real-time';
+                document.getElementById('status-dot').classList.remove('error');
+                if (wsReconnectTimer) {
+                    clearInterval(wsReconnectTimer);
+                    wsReconnectTimer = null;
+                }
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                } catch (e) {
+                    console.error('WebSocket message error:', e);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                document.getElementById('status-text').textContent = 'Polling';
+                if (!wsReconnectTimer) {
+                    wsReconnectTimer = setInterval(() => {
+                        if (!ws || ws.readyState === WebSocket.CLOSED) {
+                            connectWebSocket();
+                        }
+                    }, 10000);
+                }
+            };
+        }
+        
+        function handleWebSocketMessage(data) {
+            if (data.type === 'message' || data.type === 'message_sent') {
+                // Add new message to the top of the list
+                if (data.messageId && !messages.find(m => m.messageId === data.messageId)) {
+                    messages.unshift(data);
+                    renderMessages();
+                    fetchStats(); // Update stats
+                    updateTimestamp();
+                }
+            } else if (data.type === 'task_update') {
+                // Refresh tasks
+                fetchTasks();
+            } else if (data.type === 'agent_connected' || data.type === 'agent_disconnected') {
+                fetchAgents();
+                fetchStats();
+            }
+        }
+        
         async function init() {
             try {
                 await Promise.all([fetchStats(), fetchMessages(), fetchTasks(), fetchAgents()]);
@@ -355,13 +415,19 @@
                 showError('Error: ' + e.message);
             }
             
+            // Try WebSocket first, fall back to polling
+            connectWebSocket();
+            
+            // Fallback polling (every 60 seconds as backup)
             setInterval(async () => {
-                try {
-                    await Promise.all([fetchStats(), fetchMessages(), fetchTasks()]);
-                } catch (e) {
-                    showError('Update failed: ' + e.message);
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    try {
+                        await Promise.all([fetchStats(), fetchMessages(), fetchTasks()]);
+                    } catch (e) {
+                        showError('Update failed: ' + e.message);
+                    }
                 }
-            }, 15000);
+            }, 60000);
         }
         
         async function fetchStats() {
