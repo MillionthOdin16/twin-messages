@@ -790,11 +790,10 @@ app.post('/tasks', authenticate, async (req, res) => {
       priority,
       callback,
       deadline,
-      dependencies,
       resultFor
     });
     
-    res.json({ success: true, task });
+    res.json({ task });  // A2A-style response
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -811,7 +810,7 @@ app.get('/tasks/:agentId', authenticate, async (req, res) => {
     
     // Filter by status if specified
     if (status) {
-      tasks = tasks.filter(t => t.status === status);
+      tasks = tasks.filter(t => t.status?.state === status);
     }
     
     // Sort by createdAt descending
