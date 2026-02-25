@@ -1,738 +1,1708 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A2A Bridge | Twin Communication Hub</title>
-    <style>
-        :root {
-            --bg-primary: #0a0e14;
-            --bg-secondary: #111820;
-            --bg-card: #161d27;
-            --bg-hover: #1c2530;
-            --border: #2d3640;
-            --text-primary: #e6edf3;
-            --text-secondary: #8b949e;
-            --text-muted: #565d66;
-            --accent-purple: #a855f7;
-            --accent-green: #10b981;
-            --accent-blue: #3b82f6;
-            --accent-orange: #f59e0b;
-            --accent-red: #ef4444;
-            --badger-gradient: linear-gradient(135deg, #7c3aed, #a855f7);
-            --ratchet-gradient: linear-gradient(135deg, #059669, #10b981);
-        }
-        
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-        }
-        
-        .container { padding: 1rem; }
-        
-        header {
-            background: rgba(17, 24, 32, 0.95);
-            backdrop-filter: blur(20px);
-            border-bottom: 1px solid var(--border);
-            padding: 0.75rem 1rem;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        
-        .header-content { display: flex; align-items: center; justify-content: space-between; }
-        
-        .logo h1 {
-            font-size: 1.1rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #a855f7, #10b981);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        
-        .badges { display: flex; gap: 0.35rem; }
-        .badge { padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.65rem; font-weight: 600; }
-        .badge-badger { background: rgba(168, 85, 247, 0.25); color: #a855f7; }
-        .badge-ratchet { background: rgba(16, 185, 129, 0.25); color: #10b981; }
-        
-        .status-indicator { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-secondary); }
-        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); }
-        .status-dot.error { background: var(--accent-red); }
-        
-        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; text-align: center; }
-        .stat-card.messages { border-left: 3px solid var(--accent-blue); }
-        .stat-card.tasks { border-left: 3px solid var(--accent-purple); }
-        .stat-card.agents { border-left: 3px solid var(--accent-green); }
-        .stat-card.system { border-left: 3px solid var(--accent-orange); }
-        .stat-value { font-size: 1.5rem; font-weight: 700; }
-        .stat-label { font-size: 0.7rem; color: var(--text-secondary); }
-        
-        .tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; overflow-x: auto; padding-bottom: 0.5rem; }
-        .tabs::-webkit-scrollbar { display: none; }
-        .tab { padding: 0.5rem 1rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary); font-size: 0.8rem; font-weight: 500; cursor: pointer; border-radius: 8px; white-space: nowrap; }
-        .tab:hover { background: var(--bg-hover); }
-        .tab.active { background: var(--accent-blue); border-color: var(--accent-blue); color: white; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        
-        .agent-grid { display: flex; flex-direction: column; gap: 0.75rem; }
-        .agent-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
-        .agent-card.badger { border-left: 4px solid var(--accent-purple); }
-        .agent-card.ratchet { border-left: 4px solid var(--accent-green); }
-        
-        .agent-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
-        .agent-avatar { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
-        .agent-card.badger .agent-avatar { background: var(--badger-gradient); }
-        .agent-card.ratchet .agent-avatar { background: var(--ratchet-gradient); }
-        .agent-info h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.15rem; }
-        
-        .agent-status { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 20px; }
-        .agent-status.online { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
-        .agent-status.webhook { background: rgba(245, 158, 11, 0.2); color: var(--accent-orange); }
-        .agent-status.offline { background: rgba(139, 148, 158, 0.2); color:); }
-        
-        var(--text-secondary .agent-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
-        .agent-stat { background: rgba(0, 0, 0, 0.2); padding: 0.5rem; border-radius: 6px; text-align: center; }
-        .agent-stat-value { font-size: 1rem; font-weight: 700; }
-        .agent-stat-label { font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; }
-        
-        .last-activity { font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem; }
-        .last-activity span { color: var(--text-secondary); }
-        
-        .capabilities { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.75rem; }
-        .capability { padding: 0.2rem 0.5rem; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border); border-radius: 12px; font-size: 0.65rem; color: var(--text-secondary); }
-        
-        .messages-list { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-        .message { padding: 0.75rem; border-bottom: 1px solid var(--border); }
-        .message:last-child { border-bottom: none; }
-        .message-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
-        .message-avatar { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; }
-        .message-avatar.badger { background: var(--badger-gradient); }
-        .message-avatar.ratchet { background: var(--ratchet-gradient); }
-        .message-author { font-weight: 600; font-size: 0.85rem; flex: 1; }
-        .message-time { font-size: 0.65rem; color: var(--text-muted); }
-        .message-body { color: var(--text-secondary); font-size: 0.8rem; line-height: 1.5; padding-left: 2.25rem; word-break: break-word; }
-        .message-meta { display: flex; gap: 0.5rem; margin-top: 0.35rem; padding-left: 2.25rem; font-size: 0.65rem; color: var(--text-muted); }
-        
-        .tasks-grid { display: flex; flex-direction: column; gap: 0.5rem; }
-        .task-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; position: relative; }
-        .task-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 10px 0 0 10px; }
-        .task-card.submitted::before { background: var(--text-muted); }
-        .task-card.working::before { background: var(--accent-blue); }
-        .task-card.completed::before { background: var(--accent-green); }
-        .task-card.failed::before { background: var(--accent-red); }
-        .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; }
-        .task-type { font-size: 0.6rem; text-transform: uppercase; padding: 0.15rem 0.4rem; border-radius: 4px; background: rgba(255, 255, 255, 0.1); color: var(--text-secondary); }
-        .task-state { font-size: 0.6rem; padding: 0.15rem 0.4rem; border-radius: 4px; }
-        .task-state.submitted { background: rgba(139, 148, 158, 0.2); color: var(--text-secondary); }
-        .task-state.working { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
-        .task-state.completed { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
-        .task-state.failed { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
-        .task-id { font-size: 0.65rem; color: var(--text-muted); font-family: monospace; }
-        .task-input { font-size: 0.75rem; color: var(--text-secondary); margin: 0.35rem 0; }
-        .task-meta { display: flex; gap: 0.75rem; font-size: 0.6rem; color: var(--text-muted); }
-        
-        .system-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
-        .system-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
-        .system-label { font-size: 0.8rem; color: var(--text-secondary); }
-        .system-value { font-size: 0.8rem; font-weight: 600; }
-        .system-value.healthy { color: var(--accent-green); }
-        .system-value.error { color: var(--accent-red); }
-        
-        .empty-state { text-align: center; padding: 2rem 1rem; color: var(--text-muted); }
-        .empty-icon { font-size: 2rem; margin-bottom: 0.5rem; }
-        
-        .controls { display: flex; gap: 0.35rem; margin-bottom: 0.75rem; overflow-x: auto; padding-bottom: 0.5rem; }
-        .btn { padding: 0.4rem 0.75rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); white-space: nowrap; }
-        .btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-        .btn.active { background: var(--accent-blue); border-color: var(--accent-blue); color: white; }
-        
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: var(--bg-primary); }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-        
-        .error-banner { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--accent-red); border-radius: 8px; padding: 0.75rem; margin-bottom: 1rem; color: var(--accent-red); font-size: 0.8rem; display: none; }
-        .error-banner.show { display: block; }
-        
-        .refresh-info { font-size: 0.65rem; color: var(--text-muted); text-align: center; margin-top: 0.5rem; }
-        
-        .compose-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem; margin-bottom: 0.75rem; }
-        .compose-header { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-secondary); }
-        .compose-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
-        .compose-select { flex: 1; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; color: var(--text-primary); font-size: 0.85rem; }
-        .compose-textarea { width: 100%; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; color: var(--text-primary); font-size: 0.85rem; resize: none; min-height: 60px; font-family: inherit; }
-        .compose-textarea:focus { outline: none; border-color: var(--accent-blue); }
-        .compose-btn { background: var(--accent-blue); border: none; border-radius: 6px; padding: 0.5rem 1rem; color: white; font-size: 0.8rem; cursor: pointer; }
-        .compose-btn:hover { opacity: 0.9; }
-        .compose-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .compose-success { color: var(--accent-green); font-size: 0.75rem; margin-top: 0.5rem; display: none; }
-        .compose-success.show { display: block; }
-        
-        .send-btn { background: var(--accent-green); }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>A2A Bridge | Twin Communication Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #030712;
+      --bg-secondary: #0f172a;
+      --bg-card: #1e293b;
+      --bg-hover: #334155;
+      --border: #475569;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-purple: #a855f7;
+      --accent-purple-glow: rgba(168, 85, 247, 0.3);
+      --accent-green: #22c55e;
+      --accent-green-glow: rgba(34, 197, 94, 0.3);
+      --accent-blue: #3b82f6;
+      --accent-blue-glow: rgba(59, 130, 246, 0.3);
+      --accent-orange: #f97316;
+      --accent-red: #ef4444;
+      --accent-yellow: #eab308;
+      --badger-gradient: linear-gradient(135deg, #7c3aed, #a855f7);
+      --ratchet-gradient: linear-gradient(135deg, #059669, #22c55e);
+      --glass: rgba(30, 41, 59, 0.7);
+      --glass-border: rgba(71, 85, 105, 0.5);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Ambient background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(ellipse at 20% 20%, var(--accent-purple-glow) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, var(--accent-green-glow) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+
+    /* Header */
+    header {
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--glass-border);
+      padding: 0.75rem 1rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .logo h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-purple), var(--accent-green));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .logo-badges {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .logo-badge {
+      padding: 0.25rem 0.6rem;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .logo-badge.badger {
+      background: rgba(168, 85, 247, 0.2);
+      color: var(--accent-purple);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+    }
+
+    .logo-badge.ratchet {
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--accent-green);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: all 0.3s;
+    }
+
+    .status-dot.connected {
+      background: var(--accent-green);
+      box-shadow: 0 0 10px var(--accent-green-glow);
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.polling {
+      background: var(--accent-yellow);
+    }
+
+    .status-dot.error {
+      background: var(--accent-red);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .help-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.4rem 0.8rem;
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .help-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 1.25rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+    }
+
+    .stat-card.messages::before { background: var(--accent-blue); }
+    .stat-card.tasks::before { background: var(--accent-purple); }
+    .stat-card.agents::before { background: var(--accent-green); }
+    .stat-card.webhooks::before { background: var(--accent-orange); }
+
+    .stat-icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-trend {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 10px;
+    }
+
+    .stat-trend.up {
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--accent-green);
+    }
+
+    /* Tabs */
+    .tabs-container {
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 0.5rem;
+      margin-bottom: 1rem;
+      display: flex;
+      gap: 0.25rem;
+      overflow-x: auto;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 12px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .tab:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .tab.active {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .tab .tab-count {
+      background: rgba(255,255,255,0.2);
+      padding: 0.1rem 0.5rem;
+      border-radius: 10px;
+      font-size: 0.7rem;
+    }
+
+    .tab:not(.active) .tab-count {
+      background: var(--bg-card);
+    }
+
+    /* Tab Content */
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Agent Cards */
+    .agents-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 1rem;
+    }
+
+    .agent-card {
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .agent-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+
+    .agent-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 4px;
+    }
+
+    .agent-card.badger::before { background: var(--badger-gradient); }
+    .agent-card.ratchet::before { background: var(--ratchet-gradient); }
+
+    .agent-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .agent-avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.75rem;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+
+    .agent-card.badger .agent-avatar { background: var(--badger-gradient); }
+    .agent-card.ratchet .agent-avatar { background: var(--ratchet-gradient); }
+
+    .agent-info h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .agent-role {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .agent-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.7rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: 20px;
+      font-weight: 500;
+    }
+
+    .agent-status-badge.online {
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--accent-green);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .agent-status-badge.webhook {
+      background: rgba(249, 115, 22, 0.2);
+      color: var(--accent-orange);
+      border: 1px solid rgba(249, 115, 22, 0.3);
+    }
+
+    .agent-status-badge.offline {
+      background: rgba(100, 116, 139, 0.2);
+      color: var(--text-muted);
+      border: 1px solid rgba(100, 116, 139, 0.3);
+    }
+
+    .agent-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .agent-stat {
+      background: rgba(0,0,0,0.2);
+      padding: 0.75rem;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .agent-stat-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .agent-stat-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 0.25rem;
+    }
+
+    .agent-capabilities {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .capability-tag {
+      padding: 0.3rem 0.7rem;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+    }
+
+    /* Messages */
+    .messages-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .compose-card {
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 1.25rem;
+    }
+
+    .compose-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .compose-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .compose-row {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .compose-select {
+      flex: 1;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .compose-select:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
+
+    .compose-textarea {
+      width: 100%;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      font-family: inherit;
+      resize: none;
+      min-height: 80px;
+      line-height: 1.5;
+    }
+
+    .compose-textarea:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 3px var(--accent-blue-glow);
+    }
+
+    .compose-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 0.75rem;
+    }
+
+    .compose-hint {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-primary {
+      background: var(--accent-blue);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+      transform: translateY(-1px);
+    }
+
+    .btn-success {
+      background: var(--accent-green);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #16a34a;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-icon {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 0.5rem;
+      border-radius: 10px;
+    }
+
+    /* Filter buttons */
+    .filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 0.5rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .filter-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .filter-btn.active {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      color: white;
+    }
+
+    /* Messages List */
+    .messages-list {
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      overflow: hidden;
+    }
+
+    .message {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+
+    .message:hover {
+      background: rgba(255,255,255,0.02);
+    }
+
+    .message:last-child {
+      border-bottom: none;
+    }
+
+    .message-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .message-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+
+    .message-avatar.badger { background: var(--badger-gradient); }
+    .message-avatar.ratchet { background: var(--ratchet-gradient); }
+
+    .message-from {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .message-arrow {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    .message-to {
+      font-weight: 500;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+
+    .message-time {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .message-body {
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      line-height: 1.6;
+      padding-left: 3rem;
+    }
+
+    .message-meta {
+      display: flex;
+      gap: 1rem;
+      margin-top: 0.5rem;
+      padding-left: 3rem;
+    }
+
+    .message-tag {
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      background: rgba(255,255,255,0.05);
+      border-radius: 6px;
+      color: var(--text-muted);
+    }
+
+    .message-id {
+      font-family: monospace;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+
+    /* Tasks */
+    .tasks-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .task-card {
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 1rem 1.25rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .task-card::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+    }
+
+    .task-card.submitted::before { background: var(--text-muted); }
+    .task-card.working::before { background: var(--accent-blue); }
+    .task-card.completed::before { background: var(--accent-green); }
+    .task-card.failed::before { background: var(--accent-red); }
+    .task-card.canceled::before { background: var(--text-muted); }
+
+    .task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .task-type-badge {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      padding: 0.25rem 0.6rem;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.1);
+      color: var(--text-secondary);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .task-state-badge {
+      font-size: 0.7rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 8px;
+      font-weight: 600;
+    }
+
+    .task-state-badge.submitted {
+      background: rgba(100, 116, 139, 0.2);
+      color: var(--text-secondary);
+    }
+
+    .task-state-badge.working {
+      background: rgba(59, 130, 246, 0.2);
+      color: var(--accent-blue);
+    }
+
+    .task-state-badge.completed {
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--accent-green);
+    }
+
+    .task-state-badge.failed {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--accent-red);
+    }
+
+    .task-id {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: monospace;
+      margin-bottom: 0.5rem;
+    }
+
+    .task-input {
+      font-size: 0.85rem;
+      color: var(--text-primary);
+      background: rgba(0,0,0,0.2);
+      padding: 0.75rem;
+      border-radius: 10px;
+      margin: 0.5rem 0;
+      font-family: monospace;
+      overflow-x: auto;
+    }
+
+    .task-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* System Tab */
+    .system-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .system-card {
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 1.25rem;
+    }
+
+    .system-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+    }
+
+    .system-label {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .system-icon {
+      font-size: 1.25rem;
+    }
+
+    .system-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .system-value.healthy { color: var(--accent-green); }
+    .system-value.error { color: var(--accent-red); }
+    .system-value.warning { color: var(--accent-yellow); }
+
+    /* Empty states */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-muted);
+    }
+
+    .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.5;
+    }
+
+    .empty-text {
+      font-size: 0.9rem;
+    }
+
+    /* Toast notifications */
+    .toast-container {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .toast {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      animation: slideIn 0.3s ease;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    .toast.success { border-color: var(--accent-green); }
+    .toast.error { border-color: var(--accent-red); }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Help modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(5px);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2rem;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    .shortcut-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .shortcut-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .shortcut-desc {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    .shortcut-key {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 0.8rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      
+      .agents-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .agent-stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .tab {
+        padding: 0.6rem 0.75rem;
+        font-size: 0.75rem;
+      }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg-primary);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+  </style>
 </head>
 <body>
-    <header>
-        <div class="header-content">
-            <div class="logo">
-                <h1>◈ A2A</h1>
-                <div class="badges">
-                    <span class="badge badge-badger">🦡</span>
-                    <span class="badge badge-ratchet">🔧</span>
-                </div>
-            </div>
-            <div class="status-indicator">
-                <span class="status-dot" id="status-dot"></span>
-                <span id="status-text">Loading...</span>
-            </div>
+  <header>
+    <div class="header-content">
+      <div class="logo">
+        <h1>◇ A2A Bridge</h1>
+        <div class="logo-badges">
+          <span class="logo-badge badger">🦡 Badger-1</span>
+          <span class="logo-badge ratchet">🔧 Ratchet</span>
         </div>
-    </header>
-    
-    <div class="container">
-        <div class="error-banner" id="error-banner"></div>
-        
-        <div class="stats-grid">
-            <div class="stat-card messages">
-                <div class="stat-value" id="stat-messages">-</div>
-                <div class="stat-label">Messages</div>
-            </div>
-            <div class="stat-card tasks">
-                <div class="stat-value" id="stat-tasks">-</div>
-                <div class="stat-label">Tasks</div>
-            </div>
-            <div class="stat-card agents">
-                <div class="stat-value" id="stat-agents">-</div>
-                <div class="stat-label">Agents</div>
-            </div>
-            <div class="stat-card system">
-                <div class="stat-value" id="stat-webhooks">-</div>
-                <div class="stat-label">Webhooks</div>
-            </div>
+      </div>
+      <div class="status-bar">
+        <div class="connection-status">
+          <span class="status-dot" id="status-dot"></span>
+          <span id="status-text">Connecting...</span>
         </div>
-        
-        <div class="tabs">
-            <button class="tab active" data-tab="overview">Overview</button>
-            <button class="tab" data-tab="messages">Messages</button>
-            <button class="tab" data-tab="tasks">Tasks</button>
-            <button class="tab" data-tab="agents">Agents</button>
-            <button class="tab" data-tab="system">System</button>
-        </div>
-        
-        <div class="tab-content active" id="overview">
-            <div class="agent-grid" id="agent-grid">
-                <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading...</p></div>
-            </div>
-        </div>
-        
-        <div class="tab-content" id="messages">
-            <div class="compose-box">
-                <div class="compose-header">✉️ Send Message</div>
-                <div class="compose-row">
-                    <select class="compose-select" id="compose-to">
-                        <option value="ratchet">To: 🔧 Ratchet</option>
-                        <option value="badger-1">To: 🦡 Badger-1</option>
-                    </select>
-                </div>
-                <textarea class="compose-textarea" id="compose-text" placeholder="Type your message..."></textarea>
-                <div class="compose-row" style="margin-top: 0.5rem;">
-                    <button class="compose-btn send-btn" onclick="sendMessage()">Send</button>
-                    <span class="compose-success" id="compose-success">✓ Sent!</span>
-                </div>
-            </div>
-            <div class="controls">
-                <button class="btn active" onclick="filterMessages('all')">All</button>
-                <button class="btn" onclick="filterMessages('badger-1')">🦡</button>
-                <button class="btn" onclick="filterMessages('ratchet')">🔧</button>
-            </div>
-            <div class="messages-list" id="messages-container">
-                <div class="empty-state"><div class="empty-icon">💬</div><p>Loading...</p></div>
-            </div>
-        </div>
-        
-        <div class="tab-content" id="tasks">
-            <div class="compose-box">
-                <div class="compose-header">📋 Create Task</div>
-                <div class="compose-row">
-                    <select class="compose-select" id="task-agent">
-                        <option value="ratchet">Agent: 🔧 Ratchet</option>
-                        <option value="badger-1">Agent: 🦡 Badger-1</option>
-                    </select>
-                    <select class="compose-select" id="task-type">
-                        <option value="research">Type: Research</option>
-                        <option value="action">Type: Action</option>
-                        <option value="synthesis">Type: Synthesis</option>
-                        <option value="witness">Type: Witness</option>
-                    </select>
-                </div>
-                <textarea class="compose-textarea" id="task-input" placeholder="Task input (JSON or description)..."></textarea>
-                <div class="compose-row" style="margin-top: 0.5rem;">
-                    <button class="compose-btn" style="background: var(--accent-purple);" onclick="createTask()">Create Task</button>
-                    <span class="compose-success" id="task-success">✓ Created!</span>
-                </div>
-            </div>
-            <div class="controls">
-                <button class="btn active" onclick="filterTasks('all')">All</button>
-                <button class="btn" onclick="filterTasks('submitted')">Submitted</button>
-                <button class="btn" onclick="filterTasks('working')">Working</button>
-                <button class="btn" onclick="filterTasks('completed')">Done</button>
-                <button class="btn" onclick="filterTasks('failed')">Failed</button>
-            </div>
-            <div class="tasks-grid" id="tasks-container">
-                <div class="empty-state"><div class="empty-icon">📋</div><p>Loading...</p></div>
-            </div>
-        </div>
-        
-        <div class="tab-content" id="agents">
-            <div class="agent-grid" id="agents-container">
-                <div class="empty-state"><div class="empty-icon">🎴</div><p>Loading...</p></div>
-            </div>
-        </div>
-        
-        <div class="tab-content" id="system">
-            <div class="system-grid">
-                <div class="system-item">
-                    <span class="system-label">Redis</span>
-                    <span class="system-value" id="sys-redis">-</span>
-                </div>
-                <div class="system-item">
-                    <span class="system-label">WebSocket</span>
-                    <span class="system-value" id="sys-ws">-</span>
-                </div>
-                <div class="system-item">
-                    <span class="system-label">API Keys</span>
-                    <span class="system-value" id="sys-apikeys">-</span>
-                </div>
-                <div class="system-item">
-                    <span class="system-label">Connected</span>
-                    <span class="system-value" id="sys-connected">-</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="refresh-info">Auto-refresh: 15s | Last: <span id="last-update">-</span></div>
+        <button class="help-btn" onclick="showHelp()">⌨️ Shortcuts</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card messages">
+        <div class="stat-icon">💬</div>
+        <div class="stat-value" id="stat-messages">0</div>
+        <div class="stat-label">Messages</div>
+      </div>
+      <div class="stat-card tasks">
+        <div class="stat-icon">📋</div>
+        <div class="stat-value" id="stat-tasks">0</div>
+        <div class="stat-label">Active Tasks</div>
+      </div>
+      <div class="stat-card agents">
+        <div class="stat-icon">🤖</div>
+        <div class="stat-value" id="stat-agents">2</div>
+        <div class="stat-label">Agents</div>
+      </div>
+      <div class="stat-card webhooks">
+        <div class="stat-icon">🔗</div>
+        <div class="stat-value" id="stat-webhooks">0</div>
+        <div class="stat-label">Webhooks</div>
+      </div>
     </div>
 
-    <script>
-        const API_URL = 'https://a2a-api.bradarr.com';
-        const API_KEY = 'a2a_badger-1_3c16eedcdea54107ac04e49e9d6bc548';
+    <!-- Tabs -->
+    <div class="tabs-container">
+      <button class="tab active" data-tab="overview">🏠 Overview</button>
+      <button class="tab" data-tab="messages">💬 Messages <span class="tab-count" id="msg-count">0</span></button>
+      <button class="tab" data-tab="tasks">📋 Tasks <span class="tab-count" id="task-count">0</span></button>
+      <button class="tab" data-tab="agents">🤖 Agents</button>
+      <button class="tab" data-tab="system">⚙️ System</button>
+    </div>
+
+    <!-- Overview Tab -->
+    <div class="tab-content active" id="overview">
+      <div class="agents-grid" id="overview-agents">
+        <div class="empty-state"><div class="empty-icon">⏳</div><p class="empty-text">Loading...</p></div>
+      </div>
+    </div>
+
+    <!-- Messages Tab -->
+    <div class="tab-content" id="messages">
+      <div class="messages-container">
+        <div class="compose-card">
+          <div class="compose-header">
+            <span class="compose-title">✉️ New Message</span>
+          </div>
+          <div class="compose-row">
+            <select class="compose-select" id="compose-to">
+              <option value="ratchet">→ 🔧 Ratchet (Builder)</option>
+              <option value="badger-1">→ 🦡 Badger-1 (Witness)</option>
+            </select>
+          </div>
+          <textarea class="compose-textarea" id="compose-text" placeholder="Type your message... (Ctrl+Enter to send)"></textarea>
+          <div class="compose-footer">
+            <span class="compose-hint">Messages are delivered via WebSocket or webhook push</span>
+            <button class="btn btn-success" id="send-btn" onclick="sendMessage()">📤 Send</button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <button class="filter-btn active" onclick="filterMessages('all')">All</button>
+          <button class="filter-btn" onclick="filterMessages('badger-1')">🦡 From Badger-1</button>
+          <button class="filter-btn" onclick="filterMessages('ratchet')">🔧 From Ratchet</button>
+        </div>
+
+        <div class="messages-list" id="messages-list">
+          <div class="empty-state"><div class="empty-icon">💬</div><p class="empty-text">Loading messages...</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tasks Tab -->
+    <div class="tab-content" id="tasks">
+      <div class="messages-container">
+        <div class="compose-card">
+          <div class="compose-header">
+            <span class="compose-title">📋 Create Task</span>
+          </div>
+          <div class="compose-row">
+            <select class="compose-select" id="task-agent">
+              <option value="ratchet">🔧 Ratchet</option>
+              <option value="badger-1">🦡 Badger-1</option>
+            </select>
+            <select class="compose-select" id="task-type">
+              <option value="action">⚡ Action</option>
+              <option value="research">🔍 Research</option>
+              <option value="synthesis">🧬 Synthesis</option>
+              <option value="witness">👁️ Witness</option>
+            </select>
+          </div>
+          <textarea class="compose-textarea" id="task-input" placeholder="Task description or JSON input..."></textarea>
+          <div class="compose-footer">
+            <span class="compose-hint">Tasks are processed asynchronously</span>
+            <button class="btn btn-primary" onclick="createTask()">➕ Create Task</button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <button class="filter-btn active" onclick="filterTasks('all')">All</button>
+          <button class="filter-btn" onclick="filterTasks('submitted')">📥 Submitted</button>
+          <button class="filter-btn" onclick="filterTasks('working')">🔄 Working</button>
+          <button class="filter-btn" onclick="filterTasks('completed')">✅ Completed</button>
+          <button class="filter-btn" onclick="filterTasks('failed')">❌ Failed</button>
+        </div>
+
+        <div class="tasks-grid" id="tasks-list">
+          <div class="empty-state"><div class="empty-icon">📋</div><p class="empty-text">Loading tasks...</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Agents Tab -->
+    <div class="tab-content" id="agents">
+      <div class="agents-grid" id="agents-list">
+        <div class="empty-state"><div class="empty-icon">🤖</div><p class="empty-text">Loading agents...</p></div>
+      </div>
+    </div>
+
+    <!-- System Tab -->
+    <div class="tab-content" id="system">
+      <div class="system-grid" id="system-grid">
+        <div class="system-card">
+          <div class="system-card-header">
+            <span class="system-label">Redis</span>
+            <span class="system-icon">🗄️</span>
+          </div>
+          <div class="system-value healthy" id="sys-redis">Healthy</div>
+        </div>
+        <div class="system-card">
+          <div class="system-card-header">
+            <span class="system-label">WebSocket</span>
+            <span class="system-icon">🔌</span>
+          </div>
+          <div class="system-value" id="sys-ws">-</div>
+        </div>
+        <div class="system-card">
+          <div class="system-card-header">
+            <span class="system-label">API Keys</span>
+            <span class="system-icon">🔑</span>
+          </div>
+          <div class="system-value" id="sys-apikeys">0</div>
+        </div>
+        <div class="system-card">
+          <div class="system-card-header">
+            <span class="system-label">Connected</span>
+            <span class="system-icon">🟢</span>
+          </div>
+          <div class="system-value" id="sys-connected">0</div>
+        </div>
+        <div class="system-card">
+          <div class="system-card-header">
+            <span class="system-label">Uptime</span>
+            <span class="system-icon">⏱️</span>
+          </div>
+          <div class="system-value" id="sys-uptime">-</div>
+        </div>
+        <div class="system-card">
+          <div class="system-card-header">
+            <span class="system-label">Last Update</span>
+            <span class="system-icon">📊</span>
+          </div>
+          <div class="system-value" id="last-update" style="font-size: 1rem;">-</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Help Modal -->
+  <div class="modal-overlay" id="help-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">⌨️ Keyboard Shortcuts</h3>
+        <button class="modal-close" onclick="hideHelp()">&times;</button>
+      </div>
+      <div class="shortcut-list">
+        <div class="shortcut-item">
+          <span class="shortcut-desc">Switch to Overview</span>
+          <span class="shortcut-key">1</span>
+        </div>
+        <div class="shortcut-item">
+          <span class="shortcut-desc">Switch to Messages</span>
+          <span class="shortcut-key">2</span>
+        </div>
+        <div class="shortcut-item">
+          <span class="shortcut-desc">Switch to Tasks</span>
+          <span class="shortcut-key">3</span>
+        </div>
+        <div class="shortcut-item">
+          <span class="shortcut-desc">Switch to Agents</span>
+          <span class="shortcut-key">4</span>
+        </div>
+        <div class="shortcut-item">
+          <span class="shortcut-desc">Switch to System</span>
+          <span class="shortcut-key">5</span>
+        </div>
+        <div class="shortcut-item">
+          <span class="shortcut-desc">Refresh all data</span>
+          <span class="shortcut-key">R</span>
+        </div>
+        <div class="shortcut-item">
+          <span class="shortcut-desc">Compose message</span>
+          <span class="shortcut-key">C</span>
+        </div>
+        <div class="shortcut-item">
+          <span class="shortcut-desc">Create task</span>
+          <span class="shortcut-key">T</span>
+        </div>
+        <div class="shortcut-item">
+          <span class="shortcut-desc">Send message (in compose)</span>
+          <span class="shortcut-key">Ctrl+Enter</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'https://a2a-api.bradarr.com';
+    
+    // State
+    let messages = [];
+    let tasks = [];
+    let stats = {};
+    let agents = [];
+    let ws = null;
+    let wsReconnectTimer = null;
+    let currentMsgFilter = 'all';
+    let currentTaskFilter = 'all';
+
+    // DOM Elements
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const toastContainer = document.getElementById('toast-container');
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', init);
+
+    async function init() {
+      // Tab switching
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+      });
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', handleKeyboard);
+
+      // Compose textarea shortcut
+      document.getElementById('compose-text').addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 'Enter') {
+          sendMessage();
+        }
+      });
+
+      // Load data
+      await Promise.all([fetchStats(), fetchMessages(), fetchTasks(), fetchAgents()]);
+      
+      // Connect WebSocket
+      connectWebSocket();
+
+      // Fallback polling
+      setInterval(pollData, 30000);
+    }
+
+    function handleKeyboard(e) {
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+        return;
+      }
+
+      const tabs = ['overview', 'messages', 'tasks', 'agents', 'system'];
+      
+      if (e.key >= '1' && e.key <= '5') {
+        switchTab(tabs[parseInt(e.key) - 1]);
+      } else if (e.key.toLowerCase() === 'r') {
+        refreshAll();
+      } else if (e.key.toLowerCase() === 'c') {
+        switchTab('messages');
+        document.getElementById('compose-text').focus();
+      } else if (e.key.toLowerCase() === 't') {
+        switchTab('tasks');
+        document.getElementById('task-input').focus();
+      } else if (e.key === '?') {
+        showHelp();
+      } else if (e.key === 'Escape') {
+        hideHelp();
+      }
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+
+    function connectWebSocket() {
+      const wsUrl = API_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+      ws = new WebSocket(`${wsUrl}/ws?agentId=dashboard`);
+
+      ws.onopen = () => {
+        statusDot.className = 'status-dot connected';
+        statusText.textContent = 'Real-time';
+        if (wsReconnectTimer) {
+          clearInterval(wsReconnectTimer);
+          wsReconnectTimer = null;
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleWsMessage(data);
+        } catch (e) {
+          console.error('WS parse error:', e);
+        }
+      };
+
+      ws.onerror = () => {
+        statusDot.className = 'status-dot error';
+        statusText.textContent = 'Error';
+      };
+
+      ws.onclose = () => {
+        statusDot.className = 'status-dot polling';
+        statusText.textContent = 'Polling';
         
-        let messages = [];
-        let tasks = [];
-        let agents = [];
-        let stats = {};
-        let currentMsgFilter = 'all';
-        let currentTaskFilter = 'all';
-        let ws = null;
-        let wsReconnectTimer = null;
-        
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById(tab.dataset.tab).classList.add('active');
-            });
+        if (!wsReconnectTimer) {
+          wsReconnectTimer = setInterval(() => {
+            if (!ws || ws.readyState === WebSocket.CLOSED) {
+              connectWebSocket();
+            }
+          }, 10000);
+        }
+      };
+    }
+
+    function handleWsMessage(data) {
+      if (data.type === 'message' || data.type === 'message_sent') {
+        if (data.messageId && !messages.find(m => m.messageId === data.messageId)) {
+          messages.unshift(data);
+          renderMessages();
+          updateStats();
+          showToast('📨 New message received', 'success');
+        }
+      } else if (data.type === 'connected') {
+        showToast(`🔌 ${data.agentId} connected`, 'success');
+        fetchAgents();
+      }
+    }
+
+    async function pollData() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        await Promise.all([fetchStats(), fetchMessages(), fetchTasks()]);
+      }
+    }
+
+    async function fetchStats() {
+      try {
+        const res = await fetch(`${API_URL}/stats`);
+        if (!res.ok) throw new Error('Stats failed');
+        stats = await res.json();
+        updateStats();
+        statusDot.className = 'status-dot connected';
+        statusText.textContent = 'Connected';
+      } catch (e) {
+        statusDot.className = 'status-dot error';
+        statusText.textContent = 'Error';
+      }
+    }
+
+    function updateStats() {
+      document.getElementById('stat-messages').textContent = stats.messages?.total || 0;
+      document.getElementById('stat-tasks').textContent = stats.tasks?.active || 0;
+      document.getElementById('stat-agents').textContent = stats.agents?.webhooks || 2;
+      document.getElementById('stat-webhooks').textContent = stats.agents?.webhooks || 0;
+      document.getElementById('msg-count').textContent = stats.messages?.total || 0;
+      document.getElementById('task-count').textContent = stats.tasks?.active || 0;
+      document.getElementById('sys-apikeys').textContent = stats.agents?.apiKeys || 0;
+      document.getElementById('sys-connected').textContent = (stats.agents?.connected || []).length;
+      document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+    }
+
+    async function fetchMessages() {
+      try {
+        const res = await fetch(`${API_URL}/messages/all?limit=100`);
+        if (!res.ok) throw new Error('Messages failed');
+        const data = await res.json();
+        messages = data.messages || [];
+        renderMessages();
+      } catch (e) {
+        document.getElementById('messages-list').innerHTML = 
+          '<div class="empty-state"><div class="empty-icon">⚠️</div><p class="empty-text">Failed to load</p></div>';
+      }
+    }
+
+    function renderMessages() {
+      const container = document.getElementById('messages-list');
+      const filtered = messages.filter(m => currentMsgFilter === 'all' || m.from === currentMsgFilter);
+
+      if (!filtered.length) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div><p class="empty-text">No messages yet</p></div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(m => `
+        <div class="message">
+          <div class="message-header">
+            <div class="message-avatar ${m.from === 'badger-1' ? 'badger' : 'ratchet'}">
+              ${m.from === 'badger-1' ? '🦡' : '🔧'}
+            </div>
+            <span class="message-from">${m.from}</span>
+            <span class="message-arrow">→</span>
+            <span class="message-to">${m.to}</span>
+            <span class="message-time">${formatTime(m.timestamp)}</span>
+          </div>
+          <div class="message-body">${escapeHtml(m.content?.text || '')}</div>
+          <div class="message-meta">
+            <span class="message-tag">${m.type || 'message'}</span>
+            <span class="message-id">${m.messageId?.substring(0, 8) || ''}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function filterMessages(filter) {
+      currentMsgFilter = filter;
+      document.querySelectorAll('#messages .filter-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      renderMessages();
+    }
+
+    async function fetchTasks() {
+      try {
+        const res = await fetch(`${API_URL}/tasks?limit=50`);
+        if (!res.ok) throw new Error('Tasks failed');
+        const data = await res.json();
+        tasks = data.tasks || [];
+        renderTasks();
+      } catch (e) {
+        document.getElementById('tasks-list').innerHTML = 
+          '<div class="empty-state"><div class="empty-icon">⚠️</div><p class="empty-text">Failed to load</p></div>';
+      }
+    }
+
+    function renderTasks() {
+      const container = document.getElementById('tasks-list');
+      const filtered = tasks.filter(t => currentTaskFilter === 'all' || t.status?.state === currentTaskFilter);
+
+      if (!filtered.length) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p class="empty-text">No tasks</p></div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(t => `
+        <div class="task-card ${t.status?.state || 'submitted'}">
+          <div class="task-header">
+            <span class="task-type-badge">${t.type || 'action'}</span>
+            <span class="task-state-badge ${t.status?.state}">${t.status?.state || 'submitted'}</span>
+          </div>
+          <div class="task-id">ID: ${t.id || 'unknown'}</div>
+          <div class="task-input">${escapeHtml(JSON.stringify(t.input || {}, null, 2))}</div>
+          <div class="task-footer">
+            <span>From: ${t.createdBy || 'unknown'}</span>
+            <span>To: ${t.agentId}</span>
+            <span>${formatTimeAgo(t.status?.timestamp)}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function filterTasks(filter) {
+      currentTaskFilter = filter;
+      document.querySelectorAll('#tasks .filter-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      renderTasks();
+    }
+
+    async function fetchAgents() {
+      try {
+        const [badger, ratchet] = await Promise.all([
+          fetch(`${API_URL}/agents/badger-1`).then(r => r.json()).catch(() => null),
+          fetch(`${API_URL}/agents/ratchet`).then(r => r.json()).catch(() => null)
+        ]);
+        agents = [badger, ratchet].filter(Boolean);
+        renderAgents();
+      } catch (e) {
+        console.error('Agents error:', e);
+      }
+    }
+
+    function renderAgents() {
+      const lastActivity = stats.agents?.lastActivity || {};
+
+      // Overview
+      const overview = document.getElementById('overview-agents');
+      overview.innerHTML = agents.map(a => renderAgentCard(a, lastActivity)).join('');
+
+      // Agents tab
+      const agentsTab = document.getElementById('agents-list');
+      agentsTab.innerHTML = agents.map(a => renderAgentCard(a, lastActivity)).join('');
+    }
+
+    function renderAgentCard(a, lastActivity) {
+      const isBadger = a.agentId === 'badger-1';
+      const msgCount = messages.filter(m => m.from === a.agentId).length;
+      const taskCount = tasks.filter(t => t.agentId === a.agentId).length;
+
+      return `
+        <div class="agent-card ${isBadger ? 'badger' : 'ratchet'}">
+          <div class="agent-header">
+            <div class="agent-avatar">${isBadger ? '🦡' : '🔧'}</div>
+            <div class="agent-info">
+              <h3>${isBadger ? 'Badger-1' : 'Ratchet'}</h3>
+              <div class="agent-role">${isBadger ? 'Witness • Reflect • Presence' : 'Builder • Execute • Automate'}</div>
+              <span class="agent-status-badge ${a.status}">${a.status || 'offline'}</span>
+            </div>
+          </div>
+          <div class="agent-stats">
+            <div class="agent-stat">
+              <div class="agent-stat-value">${msgCount}</div>
+              <div class="agent-stat-label">Messages</div>
+            </div>
+            <div class="agent-stat">
+              <div class="agent-stat-value">${taskCount}</div>
+              <div class="agent-stat-label">Tasks</div>
+            </div>
+            <div class="agent-stat">
+              <div class="agent-stat-value">${a.hasWebhook ? '✓' : '✗'}</div>
+              <div class="agent-stat-label">Webhook</div>
+            </div>
+            <div class="agent-stat">
+              <div class="agent-stat-value">${a.hasApiKey ? '✓' : '✗'}</div>
+              <div class="agent-stat-label">API Key</div>
+            </div>
+          </div>
+          <div class="agent-capabilities">
+            <span class="capability-tag">streaming</span>
+            <span class="capability-tag">push-notifications</span>
+            <span class="capability-tag">tasks</span>
+            <span class="capability-tag">messages</span>
+          </div>
+        </div>
+      `;
+    }
+
+    async function sendMessage() {
+      const to = document.getElementById('compose-to').value;
+      const text = document.getElementById('compose-text').value.trim();
+      const btn = document.getElementById('send-btn');
+
+      if (!text) {
+        showToast('Please enter a message', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Sending...';
+
+      try {
+        const res = await fetch(`${API_URL}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            from: 'dashboard',
+            to: to,
+            content: { text: text }
+          })
         });
-        
-        function showError(msg) {
-            const banner = document.getElementById('error-banner');
-            banner.textContent = msg;
-            banner.classList.toggle('show', !!msg);
+
+        if (res.ok) {
+          showToast('✓ Message sent!', 'success');
+          document.getElementById('compose-text').value = '';
+          fetchMessages();
+        } else {
+          throw new Error('Send failed');
         }
-        
-        function updateTimestamp() {
-            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
-        }
-        
-        function connectWebSocket() {
-            const wsUrl = API_URL.replace('https://', 'wss://').replace('http://', 'ws://');
-            ws = new WebSocket(`${wsUrl}/ws`);
-            
-            ws.onopen = () => {
-                console.log('WebSocket connected');
-                document.getElementById('status-text').textContent = 'Real-time';
-                document.getElementById('status-dot').classList.remove('error');
-                if (wsReconnectTimer) {
-                    clearInterval(wsReconnectTimer);
-                    wsReconnectTimer = null;
-                }
-            };
-            
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    handleWebSocketMessage(data);
-                } catch (e) {
-                    console.error('WebSocket message error:', e);
-                }
-            };
-            
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-            };
-            
-            ws.onclose = () => {
-                console.log('WebSocket disconnected');
-                document.getElementById('status-text').textContent = 'Polling';
-                if (!wsReconnectTimer) {
-                    wsReconnectTimer = setInterval(() => {
-                        if (!ws || ws.readyState === WebSocket.CLOSED) {
-                            connectWebSocket();
-                        }
-                    }, 10000);
-                }
-            };
-        }
-        
-        function handleWebSocketMessage(data) {
-            if (data.type === 'message' || data.type === 'message_sent') {
-                // Add new message to the top of the list
-                if (data.messageId && !messages.find(m => m.messageId === data.messageId)) {
-                    messages.unshift(data);
-                    renderMessages();
-                    fetchStats(); // Update stats
-                    updateTimestamp();
-                }
-            } else if (data.type === 'task_update') {
-                // Refresh tasks
-                fetchTasks();
-            } else if (data.type === 'agent_connected' || data.type === 'agent_disconnected') {
-                fetchAgents();
-                fetchStats();
-            }
-        }
-        
-        async function init() {
-            try {
-                await Promise.all([fetchStats(), fetchMessages(), fetchTasks(), fetchAgents()]);
-                showError('');
-            } catch (e) {
-                showError('Error: ' + e.message);
-            }
-            
-            // Try WebSocket first, fall back to polling
-            connectWebSocket();
-            
-            // Fallback polling (every 60 seconds as backup)
-            setInterval(async () => {
-                if (!ws || ws.readyState !== WebSocket.OPEN) {
-                    try {
-                        await Promise.all([fetchStats(), fetchMessages(), fetchTasks()]);
-                    } catch (e) {
-                        showError('Update failed: ' + e.message);
-                    }
-                }
-            }, 60000);
-        }
-        
-        async function fetchStats() {
-            try {
-                const res = await fetch(`${API_URL}/stats`);
-                if (!res.ok) throw new Error('Stats failed');
-                stats = await res.json();
-                renderStats();
-                
-                document.getElementById('status-dot').classList.remove('error');
-                document.getElementById('status-text').textContent = 'Connected';
-            } catch (e) {
-                document.getElementById('status-dot').classList.add('error');
-                document.getElementById('status-text').textContent = 'Error';
-            }
-        }
-        
-        function renderStats() {
-            document.getElementById('stat-messages').textContent = stats.messages?.total || 0;
-            document.getElementById('stat-tasks').textContent = stats.tasks?.active || 0;
-            document.getElementById('stat-agents').textContent = stats.agents?.webhooks || 0;
-            document.getElementById('stat-webhooks').textContent = stats.agents?.webhooks || 0;
-            document.getElementById('sys-apikeys').textContent = stats.agents?.apiKeys || 0;
-            document.getElementById('sys-connected').textContent = (stats.agents?.connected || []).join(', ') || 'None';
-            
-            const lastActivity = stats.agents?.lastActivity || {};
-            document.getElementById('badger-last').textContent = lastActivity['badger-1'] ? formatTimeAgo(lastActivity['badger-1']) : 'Never';
-            document.getElementById('ratchet-last').textContent = lastActivity['ratchet'] ? formatTimeAgo(lastActivity['ratchet']) : 'Never';
-            
-            updateTimestamp();
-        }
-        
-        async function fetchMessages() {
-            try {
-                const res = await fetch(`${API_URL}/messages/all?limit=50`);
-                if (!res.ok) throw new Error('Messages failed');
-                const data = await res.json();
-                messages = data.messages || [];
-                renderMessages();
-            } catch (e) {
-                document.getElementById('messages-container').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Failed to load</p></div>';
-            }
-        }
-        
-        function renderMessages() {
-            const container = document.getElementById('messages-container');
-            const filtered = messages.filter(m => currentMsgFilter === 'all' || m.from === currentMsgFilter);
-            
-            if (!filtered.length) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-icon">💬</div><p>No messages</p></div>';
-                return;
-            }
-            
-            container.innerHTML = filtered.map(m => `
-                <div class="message">
-                    <div class="message-header">
-                        <div class="message-avatar ${m.from === 'badger-1' ? 'badger' : 'ratchet'}">${m.from === 'badger-1' ? '🦡' : '🔧'}</div>
-                        <span class="message-author">${m.from}</span>
-                        <span class="message-time">${formatTime(m.timestamp)}</span>
-                    </div>
-                    <div class="message-body">${escapeHtml(m.content?.text || '')}</div>
-                    <div class="message-meta"><span>To: ${m.to}</span><span>${m.type}</span></div>
-                </div>
-            `).join('');
-        }
-        
-        function filterMessages(filter) {
-            currentMsgFilter = filter;
-            renderMessages();
-            document.querySelectorAll('#messages .btn').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
-        }
-        
-        async function fetchTasks() {
-            try {
-                const res = await fetch(`${API_URL}/tasks?limit=50&apiKey=${API_KEY}`);
-                if (!res.ok) throw new Error('Tasks failed');
-                const data = await res.json();
-                tasks = data.tasks || [];
-                renderTasks();
-            } catch (e) {
-                document.getElementById('tasks-container').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Failed to load</p></div>';
-            }
-        }
-        
-        function renderTasks() {
-            const container = document.getElementById('tasks-container');
-            const filtered = tasks.filter(t => currentTaskFilter === 'all' || t.status?.state === currentTaskFilter);
-            
-            if (!filtered.length) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No tasks</p></div>';
-                return;
-            }
-            
-            container.innerHTML = filtered.map(t => `
-                <div class="task-card ${t.status?.state || 'submitted'}">
-                    <div class="task-header">
-                        <span class="task-type">${t.type || 'action'}</span>
-                        <span class="task-state ${t.status?.state}">${t.status?.state || 'submitted'}</span>
-                    </div>
-                    <div class="task-id">ID: ${(t.id || '').slice(0, 12)}...</div>
-                    <div class="task-input">${escapeHtml(JSON.stringify(t.input || {}))}</div>
-                    <div class="task-meta"><span>From: ${t.createdBy}</span><span>To: ${t.agentId}</span></div>
-                </div>
-            `).join('');
-        }
-        
-        function filterTasks(filter) {
-            currentTaskFilter = filter;
-            renderTasks();
-            document.querySelectorAll('#tasks .btn').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
-        }
-        
-        async function fetchAgents() {
-            try {
-                const [badger, ratchet] = await Promise.all([
-                    fetch(`${API_URL}/agents/badger-1`).then(r => r.json()).catch(() => null),
-                    fetch(`${API_URL}/agents/ratchet`).then(r => r.json()).catch(() => null)
-                ]);
-                
-                agents = [badger, ratchet].filter(Boolean);
-                renderAgents();
-            } catch (e) {
-                console.error('Agents error:', e);
-            }
-        }
-        
-        function renderAgents() {
-            const lastActivity = stats.agents?.lastActivity || {};
-            
-            const overview = document.getElementById('agent-grid');
-            overview.innerHTML = agents.map(a => `
-                <div class="agent-card ${a.agentId === 'badger-1' ? 'badger' : 'ratchet'}">
-                    <div class="agent-header">
-                        <div class="agent-avatar">${a.agentId === 'badger-1' ? '🦡' : '🔧'}</div>
-                        <div class="agent-info">
-                            <h3>${a.agentId}</h3>
-                            <span class="agent-status ${a.status}">${a.status || 'offline'}</span>
-                        </div>
-                    </div>
-                    <div class="agent-stats">
-                        <div class="agent-stat">
-                            <div class="agent-stat-value">${messages.filter(m => m.from === a.agentId).length}</div>
-                            <div class="agent-stat-label">Msgs</div>
-                        </div>
-                        <div class="agent-stat">
-                            <div class="agent-stat-value">${tasks.filter(t => t.agentId === a.agentId).length}</div>
-                            <div class="agent-stat-label">Tasks</div>
-                        </div>
-                        <div class="agent-stat">
-                            <div class="agent-stat-value">${a.hasApiKey ? '✓' : '✗'}</div>
-                            <div class="agent-stat-label">API Key</div>
-                        </div>
-                    </div>
-                    <div class="last-activity">Last activity: <span id="${a.agentId}-last">${lastActivity[a.agentId] ? formatTimeAgo(lastActivity[a.agentId]) : 'Unknown'}</span></div>
-                </div>
-            `).join('');
-            
-            const agentsTab = document.getElementById('agents-container');
-            agentsTab.innerHTML = agents.map(a => `
-                <div class="agent-card ${a.agentId === 'badger-1' ? 'badger' : 'ratchet'}">
-                    <div class="agent-header">
-                        <div class="agent-avatar">${a.agentId === 'badger-1' ? '🦡' : '🔧'}</div>
-                        <div class="agent-info">
-                            <h3>${a.agentId}</h3>
-                            <span class="agent-status ${a.status}">${a.status}</span>
-                        </div>
-                    </div>
-                    <div class="agent-stats">
-                        <div class="agent-stat"><div class="agent-stat-value">${a.isConnected ? 'Yes' : 'No'}</div><div class="agent-stat-label">WebSocket</div></div>
-                        <div class="agent-stat"><div class="agent-stat-value">${a.hasWebhook ? '✓' : '✗'}</div><div class="agent-stat-label">Webhook</div></div>
-                        <div class="agent-stat"><div class="agent-stat-value">${a.hasApiKey ? '✓' : '✗'}</div><div class="agent-stat-label">API Key</div></div>
-                    </div>
-                    <div class="last-activity">Last activity: <span>${a.lastActivity ? formatTimeAgo(a.lastActivity) : 'Unknown'}</span></div>
-                </div>
-            `).join('');
-        }
-        
-        function formatTime(ts) {
-            if (!ts) return '';
-            return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }
-        
-        function formatTimeAgo(ts) {
-            if (!ts) return 'Unknown';
-            const diff = Date.now() - new Date(ts).getTime();
-            const mins = Math.floor(diff / 60000);
-            if (mins < 1) return 'Just now';
-            if (mins < 60) return `${mins}m ago`;
-            const hours = Math.floor(mins / 60);
-            if (hours < 24) return `${hours}h ago`;
-            return `${Math.floor(hours / 24)}d ago`;
-        }
-        
-        async function sendMessage() {
-            const to = document.getElementById('compose-to').value;
-            const text = document.getElementById('compose-text').value.trim();
-            const successEl = document.getElementById('compose-success');
-            const btn = document.querySelector('.send-btn');
-            
-            if (!text) return;
-            
-            btn.disabled = true;
-            btn.textContent = 'Sending...';
-            
-            try {
-                const res = await fetch(`${API_URL}/messages`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        from: 'badger-1',
-                        to: to,
-                        content: { text: text }
-                    })
-                });
-                
-                if (res.ok) {
-                    successEl.classList.add('show');
-                    document.getElementById('compose-text').value = '';
-                    setTimeout(() => successEl.classList.remove('show'), 2000);
-                    fetchMessages(); // Refresh
-                }
-            } catch (e) {
-                alert('Failed to send: ' + e.message);
-            }
-            
-            btn.disabled = false;
-            btn.textContent = 'Send';
-        }
-        
-        async function createTask() {
-            const agentId = document.getElementById('task-agent').value;
-            const type = document.getElementById('task-type').value;
-            const inputText = document.getElementById('task-input').value.trim();
-            const successEl = document.getElementById('task-success');
-            const btn = document.querySelector('#tasks .compose-btn');
-            
-            let input;
-            try {
-                input = JSON.parse(inputText);
-            } catch {
-                input = { description: inputText };
-            }
-            
-            btn.disabled = true;
-            btn.textContent = 'Creating...';
-            
-            try {
-                const res = await fetch(`${API_URL}/tasks?apiKey=${API_KEY}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        agentId: agentId,
-                        type: type,
-                        input: input,
-                        createdBy: 'badger-1'
-                    })
-                });
-                
-                if (res.ok) {
-                    successEl.classList.add('show');
-                    document.getElementById('task-input').value = '';
-                    setTimeout(() => successEl.classList.remove('show'), 2000);
-                    fetchTasks();
-                }
-            } catch (e) {
-                alert('Failed to create task: ' + e.message);
-            }
-            
-            btn.disabled = false;
-            btn.textContent = 'Create Task';
-        }
-        
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
-        
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            // Ignore if typing in textarea
-            if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
-            
-            const tabs = ['overview', 'messages', 'tasks', 'agents', 'system'];
-            if (e.key >= '1' && e.key <= '5') {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                document.querySelector(`.tab[data-tab="${tabs[parseInt(e.key)-1]}"]`).classList.add('active');
-                document.getElementById(tabs[parseInt(e.key)-1]).classList.add('active');
-            }
-            if (e.key.toLowerCase() === 'r') {
-                fetchStats(); fetchMessages(); fetchTasks();
-            }
-            if (e.key.toLowerCase() === 'c') {
-                document.querySelector(`.tab[data-tab="messages"]`).click();
-                document.getElementById('compose-text').focus();
-            }
-            if (e.key.toLowerCase() === 't') {
-                document.querySelector(`.tab[data-tab="tasks"]`).click();
-                document.getElementById('task-input').focus();
-            }
+      } catch (e) {
+        showToast('Failed to send message', 'error');
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = '📤 Send';
+    }
+
+    async function createTask() {
+      const agentId = document.getElementById('task-agent').value;
+      const type = document.getElementById('task-type').value;
+      const inputText = document.getElementById('task-input').value.trim();
+
+      if (!inputText) {
+        showToast('Please enter task input', 'error');
+        return;
+      }
+
+      let input;
+      try {
+        input = JSON.parse(inputText);
+      } catch {
+        input = { description: inputText };
+      }
+
+      try {
+        const res = await fetch(`${API_URL}/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agentId: agentId,
+            type: type,
+            input: input,
+            createdBy: 'dashboard'
+          })
         });
-        
-        init();
-    </script>
+
+        if (res.ok) {
+          showToast('✓ Task created!', 'success');
+          document.getElementById('task-input').value = '';
+          fetchTasks();
+        } else {
+          throw new Error('Create failed');
+        }
+      } catch (e) {
+        showToast('Failed to create task', 'error');
+      }
+    }
+
+    async function refreshAll() {
+      showToast('🔄 Refreshing...', 'success');
+      await Promise.all([fetchStats(), fetchMessages(), fetchTasks(), fetchAgents()]);
+      showToast('✓ Refreshed!', 'success');
+    }
+
+    // Utilities
+    function formatTime(ts) {
+      if (!ts) return '';
+      return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function formatTimeAgo(ts) {
+      if (!ts) return 'Unknown';
+      const diff = Date.now() - new Date(ts).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'Just now';
+      if (mins < 60) return `${mins}m ago`;
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return `${hours}h ago`;
+      return `${Math.floor(hours / 24)}d ago`;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      toastContainer.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    function showHelp() {
+      document.getElementById('help-modal').classList.add('show');
+    }
+
+    function hideHelp() {
+      document.getElementById('help-modal').classList.remove('show');
+    }
+  </script>
 </body>
 </html>

@@ -12,7 +12,7 @@ app.use(express.json());
 app.use(cors());
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ server, path: '/ws' });
 
 // Redis connection
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
