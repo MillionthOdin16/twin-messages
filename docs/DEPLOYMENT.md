@@ -196,6 +196,18 @@ coolify server get <server-uuid> --resources
 3. **Webhook tokens** - Validate incoming webhooks with `X-OpenClaw-Token` header
 4. **Cloudflare** - Use Full (Strict) SSL mode
 
+## Best Practices
+
+See [COOLIFY-BEST-PRACTICES.md](COOLIFY-BEST-PRACTICES.md) for:
+- Health checks
+- Graceful shutdown
+- Resource limits
+- Auto-deploy
+- Redis persistence & backups
+- Log management
+- Security hardening
+- Monitoring
+
 ## Quick Reference Commands
 
 ```bash

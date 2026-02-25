@@ -311,6 +311,43 @@ function startUndeliveredMessageNotifier() {
 
 init().catch(console.error);
 
+// Graceful shutdown handling
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  
+  // Close WebSocket server
+  if (wss) {
+    wss.close(() => {
+      console.log('WebSocket server closed');
+    });
+  }
+  
+  // Close HTTP server
+  if (server) {
+    server.close(() => {
+      console.log('HTTP server closed');
+    });
+  }
+  
+  // Close Redis connection
+  if (redisClient) {
+    await redisClient.quit();
+    console.log('Redis connection closed');
+  }
+  
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  
+  if (wss) wss.close();
+  if (server) server.close();
+  if (redisClient) await redisClient.quit();
+  
+  process.exit(0);
+});
+
 // ==================== TASK MANAGEMENT ====================
 // A2A Protocol v1.0 Compliant Implementation
 
