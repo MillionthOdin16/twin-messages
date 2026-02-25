@@ -1620,8 +1620,8 @@ app.post('/broadcast', authenticate, async (req, res) => {
       results.push({ to, messageId: message.messageId, delivered: delivery.delivered });
     }
     
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       broadcast: true,
       from,
       targets: targets.length,
@@ -1630,4 +1630,13 @@ app.post('/broadcast', authenticate, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// GET /version - Get API version
+app.get('/version', (req, res) => {
+  res.json({
+    version: '2.1.0',
+    build: '2026-02-25',
+    features: ['websocket', 'webhooks', 'tasks', 'agent-cards', 'search', 'threading', 'activity']
+  });
 });
