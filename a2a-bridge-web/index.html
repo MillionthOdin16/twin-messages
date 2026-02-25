@@ -160,6 +160,20 @@
         .error-banner.show { display: block; }
         
         .refresh-info { font-size: 0.65rem; color: var(--text-muted); text-align: center; margin-top: 0.5rem; }
+        
+        .compose-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem; margin-bottom: 0.75rem; }
+        .compose-header { font-size: 0.8rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-secondary); }
+        .compose-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .compose-select { flex: 1; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; color: var(--text-primary); font-size: 0.85rem; }
+        .compose-textarea { width: 100%; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; color: var(--text-primary); font-size: 0.85rem; resize: none; min-height: 60px; font-family: inherit; }
+        .compose-textarea:focus { outline: none; border-color: var(--accent-blue); }
+        .compose-btn { background: var(--accent-blue); border: none; border-radius: 6px; padding: 0.5rem 1rem; color: white; font-size: 0.8rem; cursor: pointer; }
+        .compose-btn:hover { opacity: 0.9; }
+        .compose-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .compose-success { color: var(--accent-green); font-size: 0.75rem; margin-top: 0.5rem; display: none; }
+        .compose-success.show { display: block; }
+        
+        .send-btn { background: var(--accent-green); }
     </style>
 </head>
 <body>
@@ -216,6 +230,20 @@
         </div>
         
         <div class="tab-content" id="messages">
+            <div class="compose-box">
+                <div class="compose-header">✉️ Send Message</div>
+                <div class="compose-row">
+                    <select class="compose-select" id="compose-to">
+                        <option value="ratchet">To: 🔧 Ratchet</option>
+                        <option value="badger-1">To: 🦡 Badger-1</option>
+                    </select>
+                </div>
+                <textarea class="compose-textarea" id="compose-text" placeholder="Type your message..."></textarea>
+                <div class="compose-row" style="margin-top: 0.5rem;">
+                    <button class="compose-btn send-btn" onclick="sendMessage()">Send</button>
+                    <span class="compose-success" id="compose-success">✓ Sent!</span>
+                </div>
+            </div>
             <div class="controls">
                 <button class="btn active" onclick="filterMessages('all')">All</button>
                 <button class="btn" onclick="filterMessages('badger-1')">🦡</button>
@@ -509,10 +537,67 @@
             return `${Math.floor(hours / 24)}d ago`;
         }
         
+        async function sendMessage() {
+            const to = document.getElementById('compose-to').value;
+            const text = document.getElementById('compose-text').value.trim();
+            const successEl = document.getElementById('compose-success');
+            const btn = document.querySelector('.send-btn');
+            
+            if (!text) return;
+            
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+            
+            try {
+                const res = await fetch(`${API_URL}/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        from: 'badger-1',
+                        to: to,
+                        content: { text: text }
+                    })
+                });
+                
+                if (res.ok) {
+                    successEl.classList.add('show');
+                    document.getElementById('compose-text').value = '';
+                    setTimeout(() => successEl.classList.remove('show'), 2000);
+                    fetchMessages(); // Refresh
+                }
+            } catch (e) {
+                alert('Failed to send: ' + e.message);
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Send';
+        }
+        
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ignore if typing in textarea
+            if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+            
+            const tabs = ['overview', 'messages', 'tasks', 'agents', 'system'];
+            if (e.key >= '1' && e.key <= '5') {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.querySelector(`.tab[data-tab="${tabs[parseInt(e.key)-1]}"]`).classList.add('active');
+                document.getElementById(tabs[parseInt(e.key)-1]).classList.add('active');
+            }
+            if (e.key.toLowerCase() === 'r') {
+                fetchStats(); fetchMessages(); fetchTasks();
+            }
+            if (e.key.toLowerCase() === 'c') {
+                document.querySelector(`.tab[data-tab="messages"]`).click();
+                document.getElementById('compose-text').focus();
+            }
+        });
         
         init();
     </script>
