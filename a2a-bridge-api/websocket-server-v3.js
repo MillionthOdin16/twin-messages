@@ -429,7 +429,7 @@ async function pushNotification(agentId, message) {
     
     const response = await axios.post(webhookUrl, {
       source: message.from,
-      text: `[A2A] ${message.content.text}`,
+      text: `[A2A] ${typeof message.content === 'string' ? message.content : (message.content?.text || '')}`,
       a2a_metadata: {
         bridge: 'a2a-bridge',
         type: 'push_notification',
