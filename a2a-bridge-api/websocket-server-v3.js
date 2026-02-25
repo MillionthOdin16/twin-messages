@@ -290,8 +290,8 @@ async function createTask(task) {
 async function updateTaskStatus(taskId, newState, options = {}) {
   const { message = null, artifact = null } = options;
   
-  // Find which agent owns this task  const agentIds
- = ['badger-1', 'ratchet', 'test'];
+  // Find which agent owns this task
+  const agentIds = ['badger-1', 'ratchet', 'test'];
   
   for (const agentId of agentIds) {
     const taskJson = await redisClient.hGet(`tasks:${agentId}`, taskId);
