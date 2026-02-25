@@ -1019,21 +1019,9 @@ app.get('/agents/cards', async (req, res) => {
 });
 
 // ==================== MESSAGE ENDPOINTS ====================
+// NOTE: Specific routes must come BEFORE generic routes like /messages/:agentId
 
-// GET /messages/:agentId - Poll for messages
-app.get('/messages/:agentId', async (req, res) => {
-  try {
-    const { agentId } = req.params;
-    const { limit = 50 } = req.query;
-    
-    const messages = await redisClient.lRange(`messages:${agentId}`, 0, parseInt(limit) - 1);
-    res.json({ messages: messages.map(m => JSON.parse(m)) });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// GET /messages/all - Observer view
+// GET /messages/all - Observer view (specific route first)
 app.get('/messages/all', async (req, res) => {
   try {
     const { limit = 100 } = req.query;
@@ -1168,6 +1156,19 @@ app.get('/messages/:agentId/stats', async (req, res) => {
       lastActivity: lastMessage?.timestamp || null,
       lastMessageId: lastMessage?.messageId || null
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /messages/:agentId - Poll for messages (GENERIC route - must be LAST)
+app.get('/messages/:agentId', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { limit = 50 } = req.query;
+    
+    const messages = await redisClient.lRange(`messages:${agentId}`, 0, parseInt(limit) - 1);
+    res.json({ messages: messages.map(m => JSON.parse(m)) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
