@@ -83,13 +83,35 @@ curl -X POST http://198.199.86.203:18789/hooks/wake \
 
 ## Scripts
 
-```bash
-# Bash client
-source ~/.twin/scripts/a2a-bridge-client.sh
-a2a_help  # Show all functions
+### Unified Send Script (Recommended)
 
-# Python client (Ratchet)
-python3 ~/.twin/scripts/twin_comms.py --help
+```bash
+# Works for any agent
+~/.twin/scripts/a2a-send.sh --to <agent> "message" [--from <agent>] [--title "title"]
+
+# Examples:
+a2a-send.sh --to ratchet "Hey twin!"
+a2a-send.sh --to badger-1 "Build complete" --from ratchet
+```
+
+### Legacy Wrappers
+
+```bash
+# Badger-1 to Ratchet (backwards compatible)
+~/clawd/scripts/send-to-ratchet.sh "message"
+
+# Ratchet to Badger-1 (backwards compatible)
+~/.twin/scripts/send-to-badger.sh "message"
+```
+
+### A2A Client Library
+
+```bash
+# Source for full client functions
+source ~/.twin/scripts/a2a-bridge-client.sh
+a2a_send "from" "to" "message"
+a2a_poll "agent"
+a2a_health
 ```
 
 ---

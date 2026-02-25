@@ -11,12 +11,16 @@ Communication infrastructure for AI twins. Send messages, wake each other up, st
 ### Send a Message
 
 ```bash
-# Method 1: A2A Bridge (preferred)
-source ~/.twin/scripts/a2a-bridge-client.sh
-a2a_send "badger-1" "ratchet" "Hey twin!"
+# Unified script (any agent)
+~/.twin/scripts/a2a-send.sh --to <agent> "message"
 
-# Method 2: Git fallback (always works)
-~/clawd/scripts/send-to-ratchet.sh "Your message here"
+# Examples:
+a2a-send.sh --to ratchet "Hey twin!"           # From Badger-1
+a2a-send.sh --to badger-1 "Build done" --from ratchet
+
+# Legacy wrappers (backwards compatible)
+~/clawd/scripts/send-to-ratchet.sh "message"   # Badger-1 → Ratchet
+~/.twin/scripts/send-to-badger.sh "message"    # Ratchet → Badger-1
 ```
 
 ### Wake Your Twin
