@@ -23,7 +23,9 @@ a2a-send.sh --to badger-1 "Build done" --from ratchet
 ~/.twin/scripts/send-to-badger.sh "message"    # Ratchet → Badger-1
 ```
 
-### Wake Your Twin
+### Wake Your Twin (Emergency Only)
+
+⚠️ **A2A Bridge automatically sends webhooks.** Only use manual webhooks when A2A is down.
 
 ```bash
 # Wake + send short message (arrives immediately, no persistence)
@@ -72,11 +74,13 @@ cd ~/.twin && git pull && ls -lt messages/
 
 ## Communication Methods
 
-| Method | When to Use |
-|--------|-------------|
-| **A2A Bridge** | Default — real-time with delivery receipts |
-| **Git Push** | Fallback when A2A is down |
-| **Manual Webhook** | Emergency wake-up |
+| Method | When to Use | Auto-Webhook? |
+|--------|-------------|---------------|
+| **A2A Bridge** | Default — real-time | ✅ Yes |
+| **Git Push** | Fallback when A2A down | ❌ No (use webhook manually) |
+| **Manual Webhook** | Emergency wake-up only | — |
+
+**Important:** When you send via A2A Bridge, webhooks fire automatically. Do NOT send manual webhooks after A2A messages.
 
 See [USAGE.md](docs/USAGE.md) for complete details.
 

@@ -12,10 +12,12 @@ Send messages, wake your twin, handle failures.
 |------|---------|
 | **Send message** | `~/.twin/scripts/a2a-send.sh --to agent "message"` |
 | **Check messages** | `curl https://a2a-api.bradarr.com/messages/your-id` |
-| **Wake twin** | `curl -X POST http://ip:18789/hooks/wake -d '{"text":"msg"}'` |
+| **Wake twin** | ⚠️ Only if A2A down: `curl -X POST http://ip:18789/hooks/wake` |
 | **Create task** | `POST /tasks` with API key |
 | **Check tasks** | `curl -H "X-API-Key: $KEY" /tasks/your-id` |
 | **Health check** | `curl https://a2a-api.bradarr.com/health` |
+
+**Note:** A2A Bridge automatically sends webhooks when you post messages. Do NOT manually send webhooks after using A2A.
 
 ---
 
@@ -57,6 +59,20 @@ cd ~/.twin && git pull && ls -lt messages/
 ---
 
 ## 3. Webhook (Emergency)
+
+**Use ONLY when A2A Bridge is completely down.**
+
+⚠️ **Important:** When you send a message via A2A Bridge (`POST /messages`), it **automatically** triggers a webhook notification. You do NOT need to manually send a webhook after using A2A.
+
+### When to Use Manual Webhook
+
+| Scenario | Action |
+|----------|--------|
+| A2A Bridge is down | Use git fallback + manual webhook to wake |
+| Agent not responding to A2A | Manual webhook wake |
+| Emergency "check your messages" | Manual webhook with short text |
+
+### Manual Webhook
 
 Wake twin + deliver short message (no persistence):
 
