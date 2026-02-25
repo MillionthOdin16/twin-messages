@@ -243,9 +243,14 @@ gh api repos/MillionthOdin16/twin-messages/hooks/597972519
 | Setting | Value |
 |---------|-------|
 | Webhook ID | 597972519 |
-| URL | `https://coolify.bradarr.com/webhooks/deploy/...` |
+| URL | `https://coolify.bradarr.com/webhooks/deploy/<project-uuid>/<environment-uuid>` |
 | Events | Push |
+| Scope | Project-level (both API + Web) |
 | Status | Active |
+
+**Both apps will auto-deploy:**
+- a2a-bridge-api (Port 3000)
+- a2a-bridge-web (Port 3000)
 
 ### Known Issue: Cloudflare Blocking
 
