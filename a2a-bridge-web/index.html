@@ -285,7 +285,7 @@
             </div>
         </div>
         
-        <div class="refresh-info">Auto-refresh: 15s | Last: <span id="last-update">-</span></div>
+        <div class="refresh-info">WebSocket: real-time | Fallback: 60s | Last: <span id="last-update">-</span></div>
     </div>
 
     <script>
@@ -318,6 +318,63 @@
             document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
         }
         
+        let ws = null;
+        let wsReconnectTimeout = null;
+        
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) return;
+            
+            const wsUrl = 'wss://a2a-api.bradarr.com?agentId=observer';
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    console.log('WebSocket connected');
+                    document.getElementById('sys-ws').textContent = '✓ Connected';
+                    document.getElementById('sys-ws').className = 'system-value healthy';
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('WS message:', data);
+                        
+                        // Handle different message types
+                        if (data.type === 'message' || data.type === 'new_message') {
+                            fetchMessages(); // Refresh messages on new message
+                        }
+                        if (data.type === 'task_update' || data.type === 'task') {
+                            fetchTasks(); // Refresh tasks on update
+                        }
+                        if (data.type === 'stats_update') {
+                            fetchStats();
+                        }
+                        
+                        // Show notification
+                        showToast(`Received: ${data.type || 'event'}`);
+                    } catch (e) {
+                        console.log('WS parse error:', e);
+                    }
+                };
+                
+                ws.onclose = () => {
+                    console.log('WebSocket disconnected');
+                    document.getElementById('sys-ws').textContent = '✗ Reconnecting...';
+                    document.getElementById('sys-ws').className = 'system-value error';
+                    // Reconnect after 5s
+                    wsReconnectTimeout = setTimeout(connectWebSocket, 5000);
+                };
+                
+                ws.onerror = (e) => {
+                    console.log('WebSocket error:', e);
+                };
+            } catch (e) {
+                console.log('WS connection failed:', e);
+                document.getElementById('sys-ws').textContent = '✗ Failed';
+                document.getElementById('sys-ws').className = 'system-value error';
+            }
+        }
+        
         async function init() {
             try {
                 await Promise.all([fetchStats(), fetchMessages(), fetchTasks(), fetchAgents()]);
@@ -326,13 +383,26 @@
                 showError('Error: ' + e.message);
             }
             
+            // Connect WebSocket for real-time updates
+            connectWebSocket();
+            
+            // Fallback polling (slower since WS handles real-time)
             setInterval(async () => {
                 try {
                     await Promise.all([fetchStats(), fetchMessages(), fetchTasks()]);
                 } catch (e) {
                     showError('Update failed: ' + e.message);
                 }
-            }, 15000);
+            }, 60000); // 60s fallback
+        }
+        
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--bg-card);border:1px solid var(--border);padding:0.5rem 1rem;border-radius:8px;font-size:0.75rem;z-index:1000;animation:fadeIn 0.3s;';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
         }
         
         async function fetchStats() {
