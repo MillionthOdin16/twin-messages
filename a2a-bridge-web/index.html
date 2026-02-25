@@ -60,6 +60,21 @@
         .badge-ratchet { background: rgba(16, 185, 129, 0.25); color: #10b981; }
         
         .status-indicator { display: flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; color: var(--text-secondary); }
+        
+        .keyboard-hints {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            margin-left: 1rem;
+        }
+        
+        .kbd {
+            background: var(--bg-hover);
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            border: 1px solid var(--border);
+        }
         .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-green); }
         .status-dot.error { background: var(--accent-red); }
         
@@ -175,6 +190,10 @@
             <div class="status-indicator">
                 <span class="status-dot" id="status-dot"></span>
                 <span id="status-text">Loading...</span>
+                <div class="keyboard-hints">
+                    <span><span class="kbd">1-4</span> tabs</span>
+                    <span><span class="kbd">R</span> refresh</span>
+                </div>
             </div>
         </div>
     </header>
@@ -546,6 +565,18 @@
             if (!str) return '';
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'r' && !e.ctrlKey && !e.metaKey) refreshAll();
+            if (e.key >= '1' && e.key <= '4') {
+                const tabs = ['overview', 'messages', 'tasks', 'agents'];
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.querySelector(`[data-tab="${tabs[parseInt(e.key)-1]}"]`)?.classList.add('active');
+                document.getElementById(tabs[parseInt(e.key)-1])?.classList.add('active');
+            }
+        });
         
         init();
     </script>
