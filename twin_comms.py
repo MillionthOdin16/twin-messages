@@ -278,9 +278,13 @@ def send_a2a_message(text: str) -> bool:
     """Send message via A2A Bridge to Badger-1"""
     try:
         import requests
+        API_KEY = Path("~/.twin/a2a_api_key.txt").expanduser().read_text().strip()
         resp = requests.post(
             "https://a2a-api.bradarr.com/messages",
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "X-API-Key": API_KEY
+            },
             json={
                 "from": "ratchet",
                 "to": "badger-1",
