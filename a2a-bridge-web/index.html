@@ -255,6 +255,26 @@
         </div>
         
         <div class="tab-content" id="tasks">
+            <div class="compose-box">
+                <div class="compose-header">📋 Create Task</div>
+                <div class="compose-row">
+                    <select class="compose-select" id="task-agent">
+                        <option value="ratchet">Agent: 🔧 Ratchet</option>
+                        <option value="badger-1">Agent: 🦡 Badger-1</option>
+                    </select>
+                    <select class="compose-select" id="task-type">
+                        <option value="research">Type: Research</option>
+                        <option value="action">Type: Action</option>
+                        <option value="synthesis">Type: Synthesis</option>
+                        <option value="witness">Type: Witness</option>
+                    </select>
+                </div>
+                <textarea class="compose-textarea" id="task-input" placeholder="Task input (JSON or description)..."></textarea>
+                <div class="compose-row" style="margin-top: 0.5rem;">
+                    <button class="compose-btn" style="background: var(--accent-purple);" onclick="createTask()">Create Task</button>
+                    <span class="compose-success" id="task-success">✓ Created!</span>
+                </div>
+            </div>
             <div class="controls">
                 <button class="btn active" onclick="filterTasks('all')">All</button>
                 <button class="btn" onclick="filterTasks('submitted')">Submitted</button>
@@ -571,6 +591,49 @@
             
             btn.disabled = false;
             btn.textContent = 'Send';
+        }
+        
+        async function createTask() {
+            const agentId = document.getElementById('task-agent').value;
+            const type = document.getElementById('task-type').value;
+            const inputText = document.getElementById('task-input').value.trim();
+            const successEl = document.getElementById('task-success');
+            const btn = document.querySelector('#tasks .compose-btn');
+            
+            let input;
+            try {
+                input = JSON.parse(inputText);
+            } catch {
+                input = { description: inputText };
+            }
+            
+            btn.disabled = true;
+            btn.textContent = 'Creating...';
+            
+            try {
+                const res = await fetch(`${API_URL}/tasks?apiKey=${API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        agentId: agentId,
+                        type: type,
+                        input: input,
+                        createdBy: 'badger-1'
+                    })
+                });
+                
+                if (res.ok) {
+                    successEl.classList.add('show');
+                    document.getElementById('task-input').value = '';
+                    setTimeout(() => successEl.classList.remove('show'), 2000);
+                    fetchTasks();
+                }
+            } catch (e) {
+                alert('Failed to create task: ' + e.message);
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Create Task';
         }
         
         function escapeHtml(str) {
