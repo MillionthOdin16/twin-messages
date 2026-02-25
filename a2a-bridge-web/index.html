@@ -384,6 +384,36 @@
             text-transform: uppercase;
             color: var(--text-muted);
             font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        
+        .priority-badge {
+            font-size: 0.5rem;
+            padding: 0.1rem 0.25rem;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+        
+        .priority-badge.high { background: rgba(239, 68, 68, 0.3); color: #ef4444; }
+        .priority-badge.urgent { background: rgba(239, 68, 68, 0.5); color: #fff; }
+        
+        .task-artifact {
+            font-size: 0.7rem;
+            color: var(--accent-green);
+            margin: 0.35rem 0;
+            padding: 0.35rem;
+            background: rgba(16, 185, 129, 0.1);
+            border-radius: 4px;
+            border-left: 2px solid var(--accent-green);
+        }
+        
+        .task-history {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            margin-top: 0.35rem;
+            font-style: italic;
         }
         
         .task-state {
@@ -519,7 +549,17 @@
             color: var(--text-muted);
         }
         
-        /* System */
+        .system-section {
+            margin-bottom: 1rem;
+        }
+        
+        .section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.05em;
+        }
         .system-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -673,22 +713,61 @@
         
         <!-- System -->
         <div class="tab-content" id="system">
-            <div class="system-grid">
-                <div class="system-item">
-                    <span class="system-label">Redis</span>
-                    <span class="system-value" id="sys-redis">-</span>
+            <div class="system-section">
+                <h3 class="section-title">Core Services</h3>
+                <div class="system-grid">
+                    <div class="system-item">
+                        <span class="system-label">Status</span>
+                        <span class="system-value" id="sys-status">-</span>
+                    </div>
+                    <div class="system-item">
+                        <span class="system-label">Redis</span>
+                        <span class="system-value" id="sys-redis">-</span>
+                    </div>
+                    <div class="system-item">
+                        <span class="system-label">WebSocket</span>
+                        <span class="system-value" id="sys-ws">-</span>
+                    </div>
+                    <div class="system-item">
+                        <span class="system-label">Push Notifications</span>
+                        <span class="system-value" id="sys-push">-</span>
+                    </div>
                 </div>
-                <div class="system-item">
-                    <span class="system-label">WebSocket</span>
-                    <span class="system-value" id="sys-ws">-</span>
+            </div>
+            
+            <div class="system-section">
+                <h3 class="section-title">Features</h3>
+                <div class="system-grid">
+                    <div class="system-item">
+                        <span class="system-label">Authentication</span>
+                        <span class="system-value" id="sys-auth">-</span>
+                    </div>
+                    <div class="system-item">
+                        <span class="system-label">Tasks</span>
+                        <span class="system-value" id="sys-tasks">-</span>
+                    </div>
+                    <div class="system-item">
+                        <span class="system-label">Agent Cards</span>
+                        <span class="system-value" id="sys-agentcards">-</span>
+                    </div>
                 </div>
-                <div class="system-item">
-                    <span class="system-label">API Keys</span>
-                    <span class="system-value" id="sys-apikeys">-</span>
-                </div>
-                <div class="system-item">
-                    <span class="system-label">Uptime</span>
-                    <span class="system-value" id="sys-uptime">-</span>
+            </div>
+            
+            <div class="system-section">
+                <h3 class="section-title">Connections</h3>
+                <div class="system-grid">
+                    <div class="system-item">
+                        <span class="system-label">Connected Agents</span>
+                        <span class="system-value" id="sys-connected">-</span>
+                    </div>
+                    <div class="system-item">
+                        <span class="system-label">Webhooks</span>
+                        <span class="system-value" id="sys-webhooks">-</span>
+                    </div>
+                    <div class="system-item">
+                        <span class="system-label">API Keys</span>
+                        <span class="system-value" id="sys-apikeys">-</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -735,16 +814,43 @@
                 const res = await fetch(`${API_URL}/health`);
                 const data = await res.json();
                 
+                // Status indicator
                 document.getElementById('status-dot').classList.toggle('error', data.status !== 'healthy');
                 document.getElementById('status-text').textContent = data.status === 'healthy' ? 'Connected' : 'Error';
                 
-                document.getElementById('sys-redis').textContent = data.redis === 'connected' ? '✓' : '✗';
-                document.getElementById('sys-redis').className = 'system-value ' + (data.redis === 'connected' ? 'healthy' : 'error');
+                // Core services
+                const healthy = 'healthy';
+                const ok = (val) => val === 'connected' || val === 'enabled' ? '✓' : '✗';
+                const cls = (val) => 'system-value ' + (val === 'connected' || val === 'enabled' ? healthy : 'error');
                 
-                document.getElementById('sys-ws').textContent = data.websocket === 'enabled' ? '✓' : '✗';
-                document.getElementById('sys-ws').className = 'system-value ' + (data.websocket === 'enabled' ? 'healthy' : 'error');
+                document.getElementById('sys-status').textContent = data.status === 'healthy' ? '✓ Healthy' : '✗ Error';
+                document.getElementById('sys-status').className = 'system-value ' + (data.status === 'healthy' ? healthy : 'error');
                 
+                document.getElementById('sys-redis').textContent = ok(data.redis);
+                document.getElementById('sys-redis').className = cls(data.redis);
+                
+                document.getElementById('sys-ws').textContent = ok(data.websocket);
+                document.getElementById('sys-ws').className = cls(data.websocket);
+                
+                document.getElementById('sys-push').textContent = ok(data.pushNotifications);
+                document.getElementById('sys-push').className = cls(data.pushNotifications);
+                
+                // Features
+                document.getElementById('sys-auth').textContent = ok(data.authentication);
+                document.getElementById('sys-auth').className = cls(data.authentication);
+                
+                document.getElementById('sys-tasks').textContent = ok(data.tasks);
+                document.getElementById('sys-tasks').className = cls(data.tasks);
+                
+                document.getElementById('sys-agentcards').textContent = ok(data.agentCards);
+                document.getElementById('sys-agentcards').className = cls(data.agentCards);
+                
+                // Connections
+                document.getElementById('sys-connected').textContent = data.connectedAgents || 0;
+                document.getElementById('sys-webhooks').textContent = data.registeredWebhooks || 0;
                 document.getElementById('sys-apikeys').textContent = data.apiKeys || 0;
+                
+                // Update overview stats too
                 document.getElementById('stat-webhooks').textContent = data.registeredWebhooks || 0;
             } catch (e) {
                 console.error('Health error:', e);
@@ -792,6 +898,8 @@
                     <div class="message-meta">
                         <span>To: ${m.to}</span>
                         <span>${m.type || 'message'}</span>
+                        ${m.threadId ? `<span>Thread: ${m.threadId.slice(0,8)}</span>` : ''}
+                        ${m.parentMessageId ? `<span>Reply to: ${m.parentMessageId.slice(0,8)}</span>` : ''}
                         ${delivery.status ? `<span class="delivery-status ${delivery.status}">${delivery.status}</span>` : ''}
                     </div>
                     ${delivery.status ? `
@@ -869,20 +977,42 @@
                 return;
             }
             
-            container.innerHTML = filtered.map(t => `
-                <div class="task-card ${t.status?.state || 'submitted'}">
+            container.innerHTML = filtered.map(t => {
+                const state = t.status?.state || 'submitted';
+                const priority = t.priority || 'normal';
+                const resultFor = t.resultFor || '';
+                const artifacts = t.artifacts || [];
+                const history = t.history || [];
+                const input = t.input || {};
+                
+                // Extract input query or text
+                const inputText = input.query || input.text || JSON.stringify(input).slice(0, 100);
+                
+                // Get latest artifact if exists
+                const artifact = artifacts[0]?.parts?.[0]?.text || '';
+                
+                // Get history summary
+                const historySteps = history.map(h => h.parts?.[0]?.text).filter(Boolean).join(' → ') || '';
+                
+                return `
+                <div class="task-card ${state}">
                     <div class="task-header">
-                        <span class="task-type">${t.type || 'action'}</span>
-                        <span class="task-state ${t.status?.state}">${t.status?.state || 'submitted'}</span>
+                        <span class="task-type">${t.type || 'action'} ${priority !== 'normal' ? '<span class="priority-badge ' + priority + '">' + priority + '</span>' : ''}</span>
+                        <span class="task-state ${state}">${state}</span>
                     </div>
-                    <div class="task-id">ID: ${(t.id || '').slice(0, 12)}...</div>
-                    <div class="task-input">${escapeHtml(JSON.stringify(t.input || {}))}</div>
+                    <div class="task-id">ID: ${(t.id || '').slice(0, 8)}... | Context: ${(t.contextId || '').slice(0, 8)}...</div>
+                    <div class="task-input">
+                        <strong>Input:</strong> ${escapeHtml(inputText)}
+                    </div>
+                    ${artifact ? `<div class="task-artifact"><strong>Output:</strong> ${escapeHtml(artifact.slice(0, 150))}${artifact.length > 150 ? '...' : ''}</div>` : ''}
+                    ${historySteps ? `<div class="task-history">${escapeHtml(historySteps)}</div>` : ''}
                     <div class="task-meta">
-                        <span>From: ${t.createdBy}</span>
-                        <span>To: ${t.agentId}</span>
+                        <span>From: ${t.createdBy || 'unknown'}</span>
+                        <span>To: ${t.agentId || 'unknown'}</span>
+                        ${resultFor ? `<span>→ Result for: ${resultFor}</span>` : ''}
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
         
         function filterTasks(filter) {
