@@ -332,12 +332,33 @@
         }
         
         function renderStats() {
+            const msgByAgent = stats.messages?.byAgent || {};
+            const taskStats = stats.tasks || {};
+            
             document.getElementById('stat-messages').textContent = stats.messages?.total || 0;
-            document.getElementById('stat-tasks').textContent = stats.tasks?.active || 0;
+            document.getElementById('stat-tasks').textContent = taskStats.active || 0;
             document.getElementById('stat-agents').textContent = stats.agents?.webhooks || 0;
             document.getElementById('stat-webhooks').textContent = stats.agents?.webhooks || 0;
             document.getElementById('sys-apikeys').textContent = stats.agents?.apiKeys || 0;
             document.getElementById('sys-connected').textContent = (stats.agents?.connected || []).join(', ') || 'None';
+            
+            // Show task breakdown
+            const taskBreakdown = document.getElementById('tasks-breakdown');
+            if (taskBreakdown) {
+                taskBreakdown.innerHTML = `
+                    <span class="task-breakdown-item completed">✓ ${taskStats.completed || 0}</span>
+                    <span class="task-breakdown-item active">◐ ${taskStats.active || 0}</span>
+                    <span class="task-breakdown-item failed">✗ ${taskStats.failed || 0}</span>
+                `;
+            }
+            
+            // Show message breakdown
+            const msgBreakdown = document.getElementById('messages-breakdown');
+            if (msgBreakdown) {
+                msgBreakdown.innerHTML = Object.entries(msgByAgent).map(([agent, count]) => 
+                    `<span class="msg-breakdown-item">${agent}: ${count}</span>`
+                ).join(' ');
+            }
             
             const lastActivity = stats.agents?.lastActivity || {};
             document.getElementById('badger-last').textContent = lastActivity['badger-1'] ? formatTimeAgo(lastActivity['badger-1']) : 'Never';
@@ -445,14 +466,26 @@
         function renderAgents() {
             const lastActivity = stats.agents?.lastActivity || {};
             
+            // Fetch individual agent details
+            agents.forEach(async (a) => {
+                try {
+                    const res = await fetch(`${API_URL}/agents/${a.agentId}`);
+                    if (res.ok) {
+                        const details = await res.json();
+                        a.lastActivity = details.lastActivity;
+                        a.status = details.status;
+                    }
+                } catch (e) {}
+            });
+            
             const overview = document.getElementById('agent-grid');
             overview.innerHTML = agents.map(a => `
-                <div class="agent-card ${a.agentId === 'badger-1' ? 'badger' : 'ratchet'}">
+                <div class="agent-card ${a.agentId === 'badger-1' ? 'badger' : 'ratchet'}" onclick="showAgentDetails('${a.agentId}')">
                     <div class="agent-header">
                         <div class="agent-avatar">${a.agentId === 'badger-1' ? '🦡' : '🔧'}</div>
                         <div class="agent-info">
                             <h3>${a.agentId}</h3>
-                            <span class="agent-status ${a.status}">${a.status || 'offline'}</span>
+                            <span class="agent-status ${a.status || 'offline'}">${a.status || 'offline'}</span>
                         </div>
                     </div>
                     <div class="agent-stats">
@@ -469,7 +502,7 @@
                             <div class="agent-stat-label">API Key</div>
                         </div>
                     </div>
-                    <div class="last-activity">Last activity: <span id="${a.agentId}-last">${lastActivity[a.agentId] ? formatTimeAgo(lastActivity[a.agentId]) : 'Unknown'}</span></div>
+                    <div class="last-activity">Last activity: <span id="${a.agentId}-last">${lastActivity[a.agentId] ? formatRelativeTime(new Date(lastActivity[a.agentId])) : 'Unknown'}</span></div>
                 </div>
             `).join('');
             
