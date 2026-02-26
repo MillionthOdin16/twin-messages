@@ -1532,6 +1532,10 @@
           <button class="filter-btn" onclick="filterMessages('badger-1')">🦡 From Badger-1</button>
           <button class="filter-btn" onclick="filterMessages('ratchet')">🔧 From Ratchet</button>
           <button class="filter-btn" onclick="filterMessages('dashboard')">🖥️ From Dashboard</button>
+          <button class="filter-btn" onclick="filterMessages('undelivered')">⏳ Undelivered</button>
+          <label style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">
+            <input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()"> 🔄 Auto-refresh
+          </label>
         </div>
 
         <!-- Messages List -->
@@ -2518,9 +2522,48 @@
 
     function filterMessages(filter) {
       currentMsgFilter = filter;
-      document.querySelectorAll('#messages .filter-btn').forEach(b => b.classList.remove('active'));
-      event.target.classList.add('active');
-      renderMessages();
+      // Update active button
+      const btns = document.querySelectorAll('#messages .filter-btn');
+      btns.forEach(b => b.classList.remove('active'));
+      if (event && event.target) {
+        event.target.classList.add('active');
+      } else if (btns[0]) {
+        btns[0].classList.add('active');
+      }
+      
+      // If undelivered filter, fetch undelivered messages
+      if (filter === 'undelivered') {
+        fetchUndeliveredMessages();
+      } else {
+        renderMessages();
+      }
+    }
+    
+    async function fetchUndeliveredMessages() {
+      try {
+        const res = await fetch(`${API_URL}/messages/badger-1/undelivered`);
+        if (!res.ok) throw new Error('Failed to fetch');
+        const data = await res.json();
+        // Render as filtered messages
+        renderMessages(data.messages || []);
+      } catch (e) {
+        console.error('Failed to fetch undelivered:', e);
+      }
+    }
+    
+    let autoRefreshInterval = null;
+    function toggleAutoRefresh() {
+      const checkbox = document.getElementById('auto-refresh');
+      if (checkbox.checked) {
+        autoRefreshInterval = setInterval(refreshAll, 30000); // Every 30 seconds
+        showToast('🔄 Auto-refresh enabled (30s)', 'success');
+      } else {
+        if (autoRefreshInterval) {
+          clearInterval(autoRefreshInterval);
+          autoRefreshInterval = null;
+        }
+        showToast('⏹️ Auto-refresh disabled', 'info');
+      }
     }
 
     async function fetchConversations() {
