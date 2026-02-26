@@ -2646,21 +2646,30 @@
         return;
       }
 
-      container.innerHTML = filtered.map(t => `
-        <div class="task-card ${t.status?.state || 'submitted'}">
+      container.innerHTML = filtered.map(t => {
+        const state = t.status?.state || 'submitted';
+        const isActive = state === 'submitted' || state === 'working';
+        return `
+        <div class="task-card ${state}">
           <div class="task-header">
             <span class="task-type-badge">${t.type || 'action'}</span>
-            <span class="task-state-badge ${t.status?.state}">${t.status?.state || 'submitted'}</span>
+            <span class="task-state-badge ${state}">${state}</span>
           </div>
-          <div class="task-id">ID: ${t.id || 'unknown'}</div>
+          <div class="task-id">ID: ${(t.id || 'unknown').substring(0, 8)}</div>
           <div class="task-input">${escapeHtml(JSON.stringify(t.input || {}, null, 2))}</div>
           <div class="task-footer">
             <span>From: ${t.createdBy || 'unknown'} → To: ${t.agentId}</span>
             <span>${formatTimeAgo(t.status?.timestamp)}</span>
           </div>
           ${t.status?.message ? `<div style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-secondary);">${escapeHtml(t.status.message)}</div>` : ''}
+          ${isActive ? `
+          <div style="margin-top:0.75rem;display:flex;gap:0.5rem;">
+            <button class="btn-sm" onclick="completeTask('${t.id}')" style="background:var(--accent-green);">✓ Complete</button>
+            <button class="btn-sm" onclick="cancelTask('${t.id}')" style="background:var(--accent-red);">✕ Cancel</button>
+          </div>
+          ` : ''}
         </div>
-      `).join('');
+      `}).join('');
     }
 
     function filterTasks(filter) {
@@ -2668,6 +2677,36 @@
       document.querySelectorAll('#tasks .filter-btn').forEach(b => b.classList.remove('active'));
       event.target.classList.add('active');
       renderTasks();
+    }
+    
+    async function completeTask(taskId) {
+      try {
+        const res = await fetch(`${API_URL}/tasks/badger-1/${taskId}/status`, {
+          method: 'PUT',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'completed', message: 'Task completed via dashboard' })
+        });
+        if (!res.ok) throw new Error('Failed to complete');
+        showToast('✓ Task completed', 'success');
+        fetchTasks();
+      } catch (e) {
+        showToast('❌ Failed: ' + e.message, 'error');
+      }
+    }
+    
+    async function cancelTask(taskId) {
+      try {
+        const res = await fetch(`${API_URL}/tasks/badger-1/${taskId}/status`, {
+          method: 'PUT',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: 'canceled', message: 'Task canceled via dashboard' })
+        });
+        if (!res.ok) throw new Error('Failed to cancel');
+        showToast('✕ Task canceled', 'info');
+        fetchTasks();
+      } catch (e) {
+        showToast('❌ Failed: ' + e.message, 'error');
+      }
     }
 
     async function fetchAgents() {
