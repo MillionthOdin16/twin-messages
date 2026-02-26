@@ -213,6 +213,50 @@ function rateLimit(req, res, next) {
 // Apply rate limiting
 app.use(rateLimit);
 
+// Input validation middleware
+function validateMessage(req, res, next) {
+  if (req.path === '/messages' && req.method === 'POST') {
+    const { from, to, content } = req.body;
+    
+    if (!from || typeof from !== 'string' || from.length < 1 || from.length > 100) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        field: 'from',
+        message: 'from must be a string between 1 and 100 characters'
+      });
+    }
+    
+    if (!to || typeof to !== 'string' || to.length < 1 || to.length > 100) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        field: 'to',
+        message: 'to must be a string between 1 and 100 characters'
+      });
+    }
+    
+    if (!content || typeof content !== 'object') {
+      return res.status(400).json({
+        error: 'Invalid request',
+        field: 'content',
+        message: 'content must be an object with at least a text field'
+      });
+    }
+    
+    if (content.text && typeof content.text === 'string' && content.text.length > 10000) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        field: 'content.text',
+        message: 'Message text cannot exceed 10000 characters'
+      });
+    }
+  }
+  
+  next();
+}
+
+// Apply input validation
+app.use(validateMessage);
+
 // Cleanup old rate limit entries periodically
 setInterval(() => {
   const now = Date.now();
