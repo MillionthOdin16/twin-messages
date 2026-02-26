@@ -128,6 +128,14 @@ async function runTests() {
     if (!res.data.webhooks || !Array.isArray(res.data.webhooks)) throw new Error('Webhooks not an array');
   });
   
+  // Version endpoint
+  await test('Version endpoint', async () => {
+    const res = await axios.get(`${API_URL}/version`, { timeout: 5000 });
+    if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
+    if (!res.data.version) throw new Error('Version not returned');
+    if (!res.data.features || !Array.isArray(res.data.features)) throw new Error('Features not returned');
+  });
+  
   // Note: Cleanup endpoint not implemented in current version
   // Would require DELETE /messages/:agentId endpoint
   
