@@ -755,6 +755,7 @@ async function pushNotification(agentId, message, attempt = 1) {
   const webhookToken = webhookConfig.token;
   
   console.log(`[PUSH] Attempting to send to ${agentId} at ${webhookUrl} with token: ${webhookToken ? 'YES' : 'NO'}`);
+  console.log(`[PUSH] Full webhookConfig:`, JSON.stringify(webhookConfig));
   
   try {
     const headers = {
