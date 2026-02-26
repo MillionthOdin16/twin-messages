@@ -1165,6 +1165,29 @@ app.post('/tasks', authenticate, async (req, res) => {
       resultFor
     });
     
+    // Notify the assigned agent about the new task
+    // Send WebSocket notification if connected, otherwise push notification
+    const assignedAgent = connectedAgents.get(agentId);
+    if (assignedAgent && assignedAgent.ws && assignedAgent.ws.readyState === WebSocket.OPEN) {
+      assignedAgent.ws.send(JSON.stringify({
+        type: 'task_assigned',
+        task: task
+      }));
+      console.log(`Task assignment notification sent via WebSocket to ${agentId}`);
+    } else {
+      // Agent not connected - send push notification via webhook
+      const notificationSent = await pushNotification(agentId, {
+        type: 'task_assigned',
+        title: `New ${type || 'action'} task assigned`,
+        text: input?.text || 'You have been assigned a new task',
+        taskId: task.id,
+        contextId: task.contextId,
+        createdBy: createdBy || req.authenticatedAgent,
+        priority: priority || 'normal'
+      });
+      console.log(`Task assignment notification ${notificationSent ? 'sent' : 'failed'} via push to ${agentId}`);
+    }
+    
     res.json({ task });  // A2A-style response
   } catch (err) {
     res.status(500).json({ error: err.message });
