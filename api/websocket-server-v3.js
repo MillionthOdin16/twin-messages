@@ -162,6 +162,72 @@ function requestLogger(req, res, next) {
 // Apply logging middleware
 app.use(requestLogger);
 
+// Rate limiting middleware
+const rateLimits = new Map(); // Map<identifier, {count, resetTime}>
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const RATE_LIMIT_MAX = 100; // 100 requests per minute
+
+function rateLimit(req, res, next) {
+  // Skip rate limiting for health checks
+  if (req.path === '/health') return next();
+  
+  // Use agentId from auth, IP, or fallback
+  const identifier = req.authenticatedAgent || 
+                     req.headers['x-forwarded-for'] || 
+                     req.socket.remoteAddress || 
+                     'unknown';
+  
+  const now = Date.now();
+  const windowStart = Math.floor(now / RATE_LIMIT_WINDOW) * RATE_LIMIT_WINDOW;
+  const key = `${identifier}:${windowStart}`;
+  
+  const current = rateLimits.get(key) || { count: 0, resetTime: windowStart + RATE_LIMIT_WINDOW };
+  
+  if (now > current.resetTime) {
+    // New window
+    current.count = 1;
+    current.resetTime = windowStart + RATE_LIMIT_WINDOW;
+  } else {
+    current.count++;
+  }
+  
+  rateLimits.set(key, current);
+  
+  // Set headers
+  res.setHeader('X-RateLimit-Limit', RATE_LIMIT_MAX);
+  res.setHeader('X-RateLimit-Remaining', Math.max(0, RATE_LIMIT_MAX - current.count));
+  res.setHeader('X-RateLimit-Reset', Math.ceil(current.resetTime / 1000));
+  
+  if (current.count > RATE_LIMIT_MAX) {
+    console.warn(`Rate limit exceeded for ${identifier}`);
+    return res.status(429).json({
+      error: 'Too Many Requests',
+      message: `Rate limit exceeded. Max ${RATE_LIMIT_MAX} requests per minute.`,
+      retryAfter: Math.ceil((current.resetTime - now) / 1000)
+    });
+  }
+  
+  next();
+}
+
+// Apply rate limiting
+app.use(rateLimit);
+
+// Cleanup old rate limit entries periodically
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [key, data] of rateLimits.entries()) {
+    if (now > data.resetTime) {
+      rateLimits.delete(key);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    console.log(`Cleaned up ${cleaned} expired rate limit entries`);
+  }
+}, 60000); // Clean every minute
+
 // Generate new API key for agent
 function generateApiKey(agentId) {
   const key = `a2a_${agentId}_${uuidv4().replace(/-/g, '')}`;
