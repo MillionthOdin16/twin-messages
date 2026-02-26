@@ -1686,6 +1686,43 @@
         </div>
       </div>
       
+      <!-- Diagnostics -->
+      <div class="system-section" style="margin-top: 1.5rem;">
+        <h3 style="color: var(--text-secondary); margin-bottom: 1rem;">Diagnostics</h3>
+        <div class="system-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+          <div class="system-card">
+            <div class="system-card-header">
+              <span class="system-label">Connection State</span>
+              <span class="system-icon">🌐</span>
+            </div>
+            <div class="system-value" id="diag-connection">Checking...</div>
+          </div>
+          <div class="system-card">
+            <div class="system-card-header">
+              <span class="system-label">Latency</span>
+              <span class="system-icon">⚡</span>
+            </div>
+            <div class="system-value" id="diag-latency">-</div>
+          </div>
+          <div class="system-card">
+            <div class="system-card-header">
+              <span class="system-label">Dashboard Version</span>
+              <span class="system-icon">📦</span>
+            </div>
+            <div class="system-value" id="diag-version">2.1.0</div>
+          </div>
+        </div>
+        
+        <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button class="btn-sm" onclick="runDiagnostics()">🔍 Run Diagnostics</button>
+          <button class="btn-sm" onclick="testEndpoints()">🧪 Test Endpoints</button>
+          <button class="btn-sm" onclick="clearCache()">🗑️ Clear Cache</button>
+          <button class="btn-sm" onclick="exportDebugInfo()">📋 Export Debug Info</button>
+        </div>
+        
+        <div id="diagnostics-output" style="margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: var(--radius); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; display: none;"></div>
+      </div>
+      
       <!-- API Key Configuration -->
       <div style="margin-top: 2rem; padding: 1.5rem; background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border);">
         <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">🔑 API Configuration</h3>
@@ -2782,6 +2819,116 @@
       } catch (e) {
         showToast('Failed to create task: ' + e.message, 'error');
       }
+    }
+
+    // Diagnostics
+    async function runDiagnostics() {
+      const output = document.getElementById('diagnostics-output');
+      output.style.display = 'block';
+      output.innerHTML = '🔍 Running diagnostics...';
+      
+      const results = [];
+      
+      // Test 1: API Connectivity
+      const start1 = Date.now();
+      try {
+        await fetchWithRetry(`${API_URL}/health`, { timeout: 5000 }, 1);
+        const latency = Date.now() - start1;
+        document.getElementById('diag-latency').textContent = `${latency}ms`;
+        document.getElementById('diag-latency').className = latency < 100 ? 'system-value healthy' : (latency < 500 ? 'system-value' : 'system-value error');
+        results.push(`✓ API Connectivity: ${latency}ms`);
+      } catch (e) {
+        results.push(`✗ API Connectivity: ${e.message}`);
+      }
+      
+      // Test 2: WebSocket State
+      const wsState = ws?.readyState;
+      const wsStates = ['Connecting', 'Open', 'Closing', 'Closed'];
+      results.push(wsState === WebSocket.OPEN ? `✓ WebSocket: Connected` : `✗ WebSocket: ${wsStates[wsState] || 'Unknown'}`);
+      
+      // Test 3: Browser Status
+      results.push(`✓ Browser Online: ${navigator.onLine}`);
+      results.push(`✓ Connection State: ${connectionState}`);
+      
+      // Test 4: Local Storage
+      try {
+        const testKey = '_diag_test_';
+        localStorage.setItem(testKey, 'test');
+        localStorage.removeItem(testKey);
+        results.push(`✓ Local Storage: Working`);
+      } catch (e) {
+        results.push(`✗ Local Storage: ${e.message}`);
+      }
+      
+      // Test 5: Delivery Status Cache
+      results.push(`ℹ Delivery Cache: ${deliveryStatus.size} entries`);
+      
+      output.innerHTML = results.join('<br>');
+      document.getElementById('diag-connection').textContent = connectionState;
+      document.getElementById('diag-connection').className = connectionState === 'online' ? 'system-value healthy' : 'system-value error';
+    }
+    
+    async function testEndpoints() {
+      const output = document.getElementById('diagnostics-output');
+      output.style.display = 'block';
+      output.innerHTML = '🧪 Testing endpoints...';
+      
+      const endpoints = [
+        { url: '/health', name: 'Health' },
+        { url: '/stats', name: 'Stats' },
+        { url: '/metrics', name: 'Metrics' },
+        { url: '/version', name: 'Version' },
+        { url: '/agents', name: 'Agents' }
+      ];
+      
+      const results = [];
+      
+      for (const { url, name } of endpoints) {
+        const start = Date.now();
+        try {
+          const res = await fetch(`${API_URL}${url}`, { timeout: 10000 });
+          const latency = Date.now() - start;
+          results.push(`${res.ok ? '✓' : '⚠'} ${name}: ${res.status} (${latency}ms)`);
+        } catch (e) {
+          results.push(`✗ ${name}: ${e.message}`);
+        }
+      }
+      
+      output.innerHTML = results.join('<br>');
+    }
+    
+    function clearCache() {
+      deliveryStatus.clear();
+      pendingStatusFetches.clear();
+      showToast('🗑️ Cache cleared', 'success');
+    }
+    
+    function exportDebugInfo() {
+      const debugInfo = {
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        connectionState,
+        isOnline: navigator.onLine,
+        webSocketState: ws?.readyState,
+        apiUrl: API_URL,
+        deliveryCacheSize: deliveryStatus.size,
+        pendingFetches: pendingStatusFetches.size,
+        localStorage: {
+          apiKey: API_KEY ? 'Set' : 'Not set'
+        }
+      };
+      
+      const blob = new Blob([JSON.stringify(debugInfo, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `a2a-debug-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showToast('📋 Debug info exported', 'success');
     }
 
     // Utilities
