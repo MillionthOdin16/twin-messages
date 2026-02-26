@@ -8,7 +8,10 @@
     "dev": "nodemon websocket-server-v3.js",
     "test": "node test-api.js",
     "benchmark": "node benchmark.js",
-    "health": "curl -s https://a2a-api.bradarr.com/health | jq ."
+    "health": "curl -s https://a2a-api.bradarr.com/health | jq .",
+    "track-errors": "node error-tracker.js",
+    "lint": "echo 'No linter configured'",
+    "version": "cat ../VERSION"
   },
   "dependencies": {
     "express": "^4.18.2",
