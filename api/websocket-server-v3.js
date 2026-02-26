@@ -754,6 +754,8 @@ async function pushNotification(agentId, message, attempt = 1) {
   const webhookUrl = webhookConfig.url || webhookConfig;
   const webhookToken = webhookConfig.token;
   
+  console.log(`[PUSH] Attempting to send to ${agentId} at ${webhookUrl} with token: ${webhookToken ? 'YES' : 'NO'}`);
+  
   try {
     const headers = {
       'Content-Type': 'application/json',
@@ -762,8 +764,10 @@ async function pushNotification(agentId, message, attempt = 1) {
     
     if (webhookToken) {
       headers['X-OpenClaw-Token'] = webhookToken;
+      console.log(`[PUSH] Token header will be: X-OpenClaw-Token`);
     }
     
+    console.log(`[PUSH] Calling axios.post to ${webhookUrl}`);
     const response = await axios.post(webhookUrl, {
       source: message.from,
       text: `[A2A] ${message.content.text}`,
@@ -776,11 +780,13 @@ async function pushNotification(agentId, message, attempt = 1) {
       }
     }, { headers, timeout: 10000 });
     
-    console.log(`Push notification sent to ${agentId} via webhook (attempt ${attempt})`);
+    console.log(`[PUSH] Success! Response status: ${response.status}`);
     return { notified: true, method: 'webhook', status: 'pending_confirmation' };
   } catch (err) {
     const errorMessage = err.response?.data?.message || err.response?.statusText || err.message || 'Unknown error';
-    console.error(`Push notification error for ${agentId} (attempt ${attempt}):`, err.response?.status || errorMessage);
+    const statusCode = err.response?.status || 'N/A';
+    console.error(`[PUSH] FAILED for ${agentId}: HTTP ${statusCode} - ${errorMessage}`);
+    console.error(`[PUSH] Error details:`, err.message);
     
     // Retry for 5xx errors or network failures
     if (attempt < maxRetries && (!err.response || err.response.status >= 500)) {
