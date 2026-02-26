@@ -7,6 +7,7 @@
     "start": "node websocket-server-v3.js",
     "dev": "nodemon websocket-server-v3.js",
     "test": "node test-api.js",
+    "benchmark": "node benchmark.js",
     "health": "curl -s https://a2a-api.bradarr.com/health | jq ."
   },
   "dependencies": {
