@@ -14,10 +14,22 @@ app.use(cors());
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server, path: '/ws' });
 
-// Redis connection
+// Redis connection with timeout
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-const redisClient = redis.createClient({ url: redisUrl });
-const redisSubscriber = redis.createClient({ url: redisUrl });
+const redisClient = redis.createClient({ 
+  url: redisUrl,
+  socket: {
+    connectTimeout: 5000,
+    commandTimeout: 5000
+  }
+});
+const redisSubscriber = redis.createClient({ 
+  url: redisUrl,
+  socket: {
+    connectTimeout: 5000,
+    commandTimeout: 5000
+  }
+});
 
 redisClient.on('error', (err) => console.error('Redis Client Error', err));
 redisSubscriber.on('error', (err) => console.error('Redis Sub Error', err));
@@ -117,6 +129,39 @@ function authenticate(req, res, next) {
   });
 }
 
+// Request logging middleware
+function requestLogger(req, res, next) {
+  const start = Date.now();
+  
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const logData = {
+      timestamp: new Date().toISOString(),
+      method: req.method,
+      path: req.path,
+      statusCode: res.statusCode,
+      durationMs: duration,
+      agentId: req.authenticatedAgent || req.params.agentId || 'anonymous',
+      userAgent: req.headers['user-agent']?.substring(0, 50)
+    };
+    
+    // Log slow requests as warnings
+    if (duration > 1000) {
+      console.warn(`SLOW REQUEST: ${logData.method} ${logData.path} took ${duration}ms`);
+    }
+    
+    // Log errors
+    if (res.statusCode >= 400) {
+      console.error(`ERROR ${res.statusCode}: ${logData.method} ${logData.path} (${duration}ms)`);
+    }
+  });
+  
+  next();
+}
+
+// Apply logging middleware
+app.use(requestLogger);
+
 // Generate new API key for agent
 function generateApiKey(agentId) {
   const key = `a2a_${agentId}_${uuidv4().replace(/-/g, '')}`;
@@ -214,11 +259,20 @@ async function getUndeliveredMessages(agentId, limit = 100) {
     const messages = await redisClient.lRange(`messages:${agentId}`, 0, limit - 1);
     const parsedMessages = messages.map(m => JSON.parse(m));
     
-    const undelivered = [];
+    // Use pipelining for efficiency
+    if (parsedMessages.length === 0) return [];
+    
+    const pipeline = redisClient.multi();
     for (const message of parsedMessages) {
-      const receipt = await redisClient.hGet(`receipts:${message.messageId}`, agentId);
-      if (!receipt) {
-        undelivered.push(message);
+      pipeline.hGet(`receipts:${message.messageId}`, agentId);
+    }
+    
+    const receipts = await pipeline.exec();
+    
+    const undelivered = [];
+    for (let i = 0; i < parsedMessages.length; i++) {
+      if (!receipts[i]) {
+        undelivered.push(parsedMessages[i]);
       }
     }
     return undelivered;
@@ -310,6 +364,18 @@ function startUndeliveredMessageNotifier() {
 }
 
 init().catch(console.error);
+
+// Global WebSocket heartbeat - terminate stale connections
+setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (!ws.isAlive) {
+      console.log('Terminating stale WebSocket connection');
+      return ws.terminate();
+    }
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
 
 // Graceful shutdown handling
 process.on('SIGTERM', async () => {
@@ -491,9 +557,12 @@ async function updateTaskStatus(taskId, newState, options = {}) {
   return null;
 }
 
-// Send callback webhook for task completion
-async function sendTaskCallback(task, finalStatus) {
-  if (!task.callback) return;
+// Send callback webhook for task completion (with retry)
+async function sendTaskCallback(task, finalStatus, attempt = 1) {
+  if (!task.callback) return { sent: false, reason: 'no_callback' };
+  
+  const maxRetries = 3;
+  const retryDelay = 2000 * attempt; // Exponential backoff
   
   try {
     const webhookConfig = agentWebhooks.get(task.resultFor || task.createdBy);
@@ -505,7 +574,8 @@ async function sendTaskCallback(task, finalStatus) {
       status: task.status,
       artifacts: task.artifacts,
       metadata: task.metadata,
-      source: 'a2a-bridge'
+      source: 'a2a-bridge',
+      attempt: attempt
     }, {
       headers: {
         'Content-Type': 'application/json',
@@ -514,9 +584,19 @@ async function sendTaskCallback(task, finalStatus) {
       timeout: 10000
     });
     
-    console.log(`Task callback sent for ${task.id} to ${task.callback}`);
+    console.log(`Task callback sent for ${task.id} to ${task.callback} (attempt ${attempt})`);
+    return { sent: true, attempt };
   } catch (err) {
-    console.error(`Task callback failed for ${task.id}:`, err.message);
+    console.error(`Task callback failed for ${task.id} (attempt ${attempt}):`, err.message);
+    
+    if (attempt < maxRetries) {
+      console.log(`Retrying callback for ${task.id} in ${retryDelay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+      return sendTaskCallback(task, finalStatus, attempt + 1);
+    }
+    
+    console.error(`Task callback failed permanently for ${task.id} after ${maxRetries} attempts`);
+    return { sent: false, reason: 'max_retries_exceeded', error: err.message };
   }
 }
 
@@ -549,12 +629,15 @@ async function notifyTaskResult(task, fromAgentId) {
 
 // ==================== PUSH NOTIFICATIONS ====================
 
-async function pushNotification(agentId, message) {
+async function pushNotification(agentId, message, attempt = 1) {
   const webhookConfig = agentWebhooks.get(agentId);
   if (!webhookConfig) {
     console.log(`No webhook configured for ${agentId}`);
     return { delivered: false, reason: 'no_webhook' };
   }
+  
+  const maxRetries = 2;
+  const retryDelay = 1500 * attempt;
   
   const webhookUrl = webhookConfig.url || webhookConfig;
   const webhookToken = webhookConfig.token;
@@ -576,15 +659,24 @@ async function pushNotification(agentId, message) {
         bridge: 'a2a-bridge',
         type: 'push_notification',
         timestamp: new Date().toISOString(),
-        message: message
+        message: message,
+        attempt: attempt
       }
     }, { headers, timeout: 10000 });
     
-    console.log(`Push notification sent to ${agentId} via webhook`);
+    console.log(`Push notification sent to ${agentId} via webhook (attempt ${attempt})`);
     return { notified: true, method: 'webhook', status: 'pending_confirmation' };
   } catch (err) {
     const errorMessage = err.response?.data?.message || err.response?.statusText || err.message || 'Unknown error';
-    console.error(`Push notification error for ${agentId}:`, err.response?.status || errorMessage);
+    console.error(`Push notification error for ${agentId} (attempt ${attempt}):`, err.response?.status || errorMessage);
+    
+    // Retry for 5xx errors or network failures
+    if (attempt < maxRetries && (!err.response || err.response.status >= 500)) {
+      console.log(`Retrying push notification for ${agentId} in ${retryDelay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+      return pushNotification(agentId, message, attempt + 1);
+    }
+    
     return { delivered: false, reason: 'webhook_failed', status: err.response?.status, error: errorMessage };
   }
 }
@@ -681,6 +773,11 @@ wss.on('connection', (ws, req) => {
     console.log(`Agent disconnected: ${agentId}`);
     connectedAgents.delete(agentId);
     
+    // Clear ping interval
+    if (ws.pingInterval) {
+      clearInterval(ws.pingInterval);
+    }
+    
     // Update agent card status
     const card = agentCards.get(agentId);
     if (card) {
@@ -689,6 +786,26 @@ wss.on('connection', (ws, req) => {
       agentCards.set(agentId, card);
     }
   });
+  
+  ws.on('error', (err) => {
+    console.error(`WebSocket error for ${agentId}:`, err.message);
+  });
+  
+  // Heartbeat/ping-pong to detect stale connections
+  ws.isAlive = true;
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
+  
+  ws.pingInterval = setInterval(() => {
+    if (!ws.isAlive) {
+      console.log(`Terminating stale connection for ${agentId}`);
+      ws.terminate();
+      return;
+    }
+    ws.isAlive = false;
+    ws.ping();
+  }, 30000); // Check every 30 seconds
   
   ws.on('message', async (data) => {
     try {
@@ -1211,17 +1328,42 @@ app.get('/messages/:messageId/status', async (req, res) => {
   try {
     const { messageId } = req.params;
     
-    const receipts = await redisClient.hGetAll(`receipts:${messageId}`);
+    // Timeout wrapper for Redis operations
+    const withTimeout = (promise, ms) => {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Redis timeout')), ms)
+        )
+      ]);
+    };
+    
+    const receipts = await withTimeout(
+      redisClient.hGetAll(`receipts:${messageId}`), 
+      3000
+    );
     
     const parsedReceipts = {};
     for (const [agentId, receiptJson] of Object.entries(receipts)) {
-      parsedReceipts[agentId] = JSON.parse(receiptJson);
+      try {
+        parsedReceipts[agentId] = JSON.parse(receiptJson);
+      } catch (e) {
+        console.error(`Invalid receipt JSON for ${messageId}/${agentId}:`, e.message);
+      }
     }
     
-    const notifications = await redisClient.hGetAll(`notifications:${messageId}`);
+    const notifications = await withTimeout(
+      redisClient.hGetAll(`notifications:${messageId}`),
+      3000
+    );
+    
     const parsedNotifications = {};
     for (const [agentId, notifJson] of Object.entries(notifications)) {
-      parsedNotifications[agentId] = JSON.parse(notifJson);
+      try {
+        parsedNotifications[agentId] = JSON.parse(notifJson);
+      } catch (e) {
+        console.error(`Invalid notification JSON for ${messageId}/${agentId}:`, e.message);
+      }
     }
     
     res.json({
@@ -1234,7 +1376,15 @@ app.get('/messages/:messageId/status', async (req, res) => {
       notifiedTo: Object.keys(parsedNotifications).filter(id => parsedNotifications[id].notified)
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(`Status check failed for ${req.params.messageId}:`, err.message);
+    res.status(500).json({ 
+      error: err.message,
+      messageId: req.params.messageId,
+      receipts: {},
+      deliveredTo: [],
+      notifications: {},
+      notifiedTo: []
+    });
   }
 });
 
@@ -1242,25 +1392,47 @@ app.get('/messages/:messageId/status', async (req, res) => {
 app.get('/messages/:agentId/undelivered', async (req, res) => {
   try {
     const { agentId } = req.params;
-    const { limit = 50 } = req.query;
+    const { limit = 50, skipCache } = req.query;
+    
+    // Check cache first (5 minute TTL)
+    const cacheKey = `undelivered:${agentId}:${limit}`;
+    if (!skipCache) {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        return res.json(JSON.parse(cached));
+      }
+    }
     
     const messages = await redisClient.lRange(`messages:${agentId}`, 0, parseInt(limit) - 1);
     const parsedMessages = messages.map(m => JSON.parse(m));
     
-    const undelivered = [];
+    // Batch check receipts using pipelining for efficiency
+    const pipeline = redisClient.multi();
     for (const message of parsedMessages) {
-      const receipt = await redisClient.hGet(`receipts:${message.messageId}`, agentId);
-      if (!receipt) {
-        undelivered.push(message);
+      pipeline.hGet(`receipts:${message.messageId}`, agentId);
+    }
+    
+    const receipts = await pipeline.exec();
+    
+    const undelivered = [];
+    for (let i = 0; i < parsedMessages.length; i++) {
+      if (!receipts[i]) {
+        undelivered.push(parsedMessages[i]);
       }
     }
     
-    res.json({ 
+    const result = { 
       messages: undelivered,
       count: undelivered.length,
       total: parsedMessages.length
-    });
+    };
+    
+    // Cache for 5 minutes
+    await redisClient.setEx(cacheKey, 300, JSON.stringify(result));
+    
+    res.json(result);
   } catch (err) {
+    console.error(`Undelivered check failed for ${req.params.agentId}:`, err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1453,6 +1625,66 @@ app.get('/stats', async (req, res) => {
       },
       timestamp: new Date().toISOString()
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /metrics - Prometheus-style metrics
+app.get('/metrics', async (req, res) => {
+  try {
+    const metrics = {
+      // Message metrics
+      messages_total: 0,
+      messages_by_agent: {},
+      
+      // Task metrics
+      tasks_total: 0,
+      tasks_active: 0,
+      tasks_completed: 0,
+      tasks_failed: 0,
+      
+      // Agent metrics
+      agents_connected: connectedAgents.size,
+      agents_with_webhooks: agentWebhooks.size,
+      agents_with_api_keys: apiKeys.size,
+      
+      // System metrics
+      uptime_seconds: process.uptime(),
+      memory_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      timestamp: new Date().toISOString()
+    };
+    
+    // Get message counts
+    try {
+      const allMessages = await redisClient.lRange('messages:all', 0, -1);
+      metrics.messages_total = allMessages.length;
+      
+      for (const msgJson of allMessages.slice(0, 1000)) {
+        try {
+          const msg = JSON.parse(msgJson);
+          metrics.messages_by_agent[msg.from] = (metrics.messages_by_agent[msg.from] || 0) + 1;
+        } catch (e) {
+          // Skip invalid messages
+        }
+      }
+    } catch (e) {
+      console.error('Error counting messages:', e.message);
+    }
+    
+    // Get task counts
+    try {
+      const allTasks = await redisClient.hGetAll('tasks:byId');
+      const tasks = Object.values(allTasks).map(t => JSON.parse(t));
+      metrics.tasks_total = tasks.length;
+      metrics.tasks_active = tasks.filter(t => !['completed', 'failed', 'canceled'].includes(t.status?.state)).length;
+      metrics.tasks_completed = tasks.filter(t => t.status?.state === 'completed').length;
+      metrics.tasks_failed = tasks.filter(t => t.status?.state === 'failed').length;
+    } catch (e) {
+      console.error('Error counting tasks:', e.message);
+    }
+    
+    res.json(metrics);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

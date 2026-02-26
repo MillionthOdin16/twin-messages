@@ -1821,16 +1821,54 @@
     
     // Delivery status cache
     const deliveryStatus = new Map();
+    const pendingStatusFetches = new Set();
 
     async function fetchDeliveryStatus(messageId) {
+      // Prevent duplicate fetches for same message
+      if (pendingStatusFetches.has(messageId)) {
+        return deliveryStatus.get(messageId) || null;
+      }
+      
+      pendingStatusFetches.add(messageId);
+      
       try {
-        const res = await fetch(`${API_URL}/messages/${messageId}/status`);
-        if (!res.ok) return null;
+        // Add timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const res = await fetch(`${API_URL}/messages/${messageId}/status`, {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!res.ok) {
+          console.warn(`Status fetch failed for ${messageId}: ${res.status}`);
+          return null;
+        }
+        
         const data = await res.json();
-        deliveryStatus.set(messageId, data);
-        return data;
+        
+        // Handle both old and new response formats
+        const normalizedData = {
+          messageId: data.messageId || messageId,
+          receipts: data.receipts || {},
+          deliveredTo: data.deliveredTo || [],
+          notifications: data.notifications || {},
+          notifiedTo: data.notifiedTo || []
+        };
+        
+        deliveryStatus.set(messageId, normalizedData);
+        return normalizedData;
       } catch (e) {
+        if (e.name === 'AbortError') {
+          console.warn(`Status fetch timeout for ${messageId}`);
+        } else {
+          console.error(`Status fetch error for ${messageId}:`, e);
+        }
         return null;
+      } finally {
+        pendingStatusFetches.delete(messageId);
       }
     }
 
@@ -1854,11 +1892,26 @@
     }
 
     function getDeliveryIcon(status) {
-      if (!status || !status.receipts || status.receipts.length === 0) {
+      // Handle null/undefined status
+      if (!status) {
         return { icon: '⏳', class: 'pending', text: 'Pending' };
       }
-      const hasDelivered = status.receipts.some(r => r.status === 'delivered');
-      const hasRead = status.receipts.some(r => r.status === 'read');
+      
+      // Handle both array and object formats for receipts
+      let receiptList = [];
+      if (Array.isArray(status.receipts)) {
+        receiptList = status.receipts;
+      } else if (status.receipts && typeof status.receipts === 'object') {
+        receiptList = Object.values(status.receipts);
+      }
+      
+      if (receiptList.length === 0) {
+        return { icon: '⏳', class: 'pending', text: 'Pending' };
+      }
+      
+      const hasRead = receiptList.some(r => r.status === 'read');
+      const hasDelivered = receiptList.some(r => r.status === 'delivered');
+      
       if (hasRead) return { icon: '✓✓', class: 'read', text: 'Read' };
       if (hasDelivered) return { icon: '✓', class: 'delivered', text: 'Delivered' };
       return { icon: '⏳', class: 'pending', text: 'Pending' };
@@ -2106,7 +2159,33 @@
         const data = await res.json();
         messages = data.messages || [];
         renderMessages();
+        
+        // Batch fetch delivery statuses after render (limit to first 20 for performance)
+        const messagesNeedingStatus = messages
+          .filter(m => !deliveryStatus.has(m.messageId))
+          .slice(0, 20);
+        
+        if (messagesNeedingStatus.length > 0) {
+          // Fetch in parallel with concurrency limit
+          const batchSize = 5;
+          for (let i = 0; i < messagesNeedingStatus.length; i += batchSize) {
+            const batch = messagesNeedingStatus.slice(i, i + batchSize);
+            await Promise.all(batch.map(m => fetchDeliveryStatus(m.messageId)));
+            
+            // Update UI after each batch
+            batch.forEach(m => {
+              const el = document.getElementById(`delivery-${m.messageId}`);
+              if (el) {
+                const status = deliveryStatus.get(m.messageId);
+                const delivery = getDeliveryIcon(status);
+                el.className = `delivery-status ${delivery.class}`;
+                el.innerHTML = `${delivery.icon} ${delivery.text}`;
+              }
+            });
+          }
+        }
       } catch (e) {
+        console.error('Fetch messages error:', e);
         document.getElementById('messages-list').innerHTML = 
           '<div class="empty-state"><div class="empty-icon">⚠️</div><p class="empty-text">Failed to load messages</p></div>';
       }
