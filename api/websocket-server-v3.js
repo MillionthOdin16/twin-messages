@@ -6,6 +6,8 @@ const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 const url = require('url');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(express.json());
@@ -2123,9 +2125,21 @@ app.post('/broadcast', authenticate, async (req, res) => {
 
 // GET /version - Get API version
 app.get('/version', (req, res) => {
+  // Read version from file for dynamic updates
+  let version = '2.1.0';
+  try {
+    const versionFile = path.join(__dirname, '..', 'VERSION');
+    if (fs.existsSync(versionFile)) {
+      version = fs.readFileSync(versionFile, 'utf8').trim();
+    }
+  } catch (e) {
+    console.error('Error reading VERSION file:', e.message);
+  }
+  
   res.json({
-    version: '2.1.0',
+    version: version,
     build: '2026-02-25',
-    features: ['websocket', 'webhooks', 'tasks', 'agent-cards', 'search', 'threading', 'activity']
+    features: ['websocket', 'webhooks', 'tasks', 'agent-cards', 'search', 'threading', 'activity', 'rate-limiting', 'metrics'],
+    changelog: 'https://github.com/MillionthOdin16/twin-messages/blob/main/CHANGELOG.md'
   });
 });
