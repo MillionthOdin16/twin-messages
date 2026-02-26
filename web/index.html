@@ -1819,6 +1819,97 @@
       return headers;
     }
     
+    // Connection state management
+    let isOnline = navigator.onLine;
+    let connectionState = 'connecting'; // 'connecting' | 'online' | 'offline'
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 2000;
+    
+    // Listen for online/offline events
+    window.addEventListener('online', () => {
+      isOnline = true;
+      connectionState = 'online';
+      retryCount = 0;
+      showToast('🌐 Connection restored', 'success');
+      refreshAll();
+    });
+    
+    window.addEventListener('offline', () => {
+      isOnline = false;
+      connectionState = 'offline';
+      showToast('📡 Connection lost - working offline', 'error');
+      updateConnectionStatus('offline');
+    });
+    
+    function updateConnectionStatus(state) {
+      const statusDot = document.getElementById('status-dot');
+      const statusText = document.getElementById('status-text');
+      
+      if (!statusDot || !statusText) return;
+      
+      switch (state) {
+        case 'online':
+          statusDot.className = 'status-dot connected';
+          statusText.textContent = 'Connected';
+          break;
+        case 'offline':
+          statusDot.className = 'status-dot error';
+          statusText.textContent = 'Offline';
+          break;
+        case 'error':
+          statusDot.className = 'status-dot error';
+          statusText.textContent = 'Error';
+          break;
+        case 'connecting':
+          statusDot.className = 'status-dot polling';
+          statusText.textContent = 'Connecting...';
+          break;
+      }
+    }
+    
+    // Enhanced fetch with retry logic
+    async function fetchWithRetry(url, options = {}, maxRetries = MAX_RETRIES) {
+      let lastError;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), options.timeout || 10000);
+          
+          const res = await fetch(url, {
+            ...options,
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          // Reset retry count on success
+          retryCount = 0;
+          
+          // Check for rate limiting
+          if (res.status === 429) {
+            const retryAfter = res.headers.get('Retry-After') || 5;
+            showToast(`⏳ Rate limited - retrying in ${retryAfter}s`, 'warning');
+            await new Promise(r => setTimeout(r, retryAfter * 1000));
+            continue;
+          }
+          
+          return res;
+        } catch (err) {
+          lastError = err;
+          
+          if (attempt < maxRetries) {
+            const delay = RETRY_DELAY * attempt;
+            console.warn(`Fetch attempt ${attempt} failed, retrying in ${delay}ms...`, err.message);
+            await new Promise(r => setTimeout(r, delay));
+          }
+        }
+      }
+      
+      throw lastError;
+    }
+    
     // Delivery status cache
     const deliveryStatus = new Map();
     const pendingStatusFetches = new Set();
@@ -2123,16 +2214,20 @@
 
     async function fetchStats() {
       try {
-        const res = await fetch(`${API_URL}/stats`);
-        if (!res.ok) throw new Error('Stats failed');
+        updateConnectionStatus('connecting');
+        const res = await fetchWithRetry(`${API_URL}/stats`, { timeout: 5000 });
+        if (!res.ok) throw new Error(`Stats failed: ${res.status}`);
         stats = await res.json();
         updateStats();
-        statusDot.className = 'status-dot connected';
-        statusText.textContent = 'Connected';
+        updateConnectionStatus('online');
       } catch (e) {
-        statusDot.className = 'status-dot error';
-        statusText.textContent = 'Error';
         console.error('Stats error:', e);
+        updateConnectionStatus('error');
+        // Don't show toast for background refresh failures
+        if (retryCount === 0) {
+          showToast('⚠️ Connection issue - will retry', 'error');
+        }
+        retryCount++;
       }
     }
 
@@ -2154,8 +2249,8 @@
 
     async function fetchMessages() {
       try {
-        const res = await fetch(`${API_URL}/messages/all?limit=100`);
-        if (!res.ok) throw new Error('Messages failed');
+        const res = await fetchWithRetry(`${API_URL}/messages/all?limit=100`, { timeout: 10000 });
+        if (!res.ok) throw new Error(`Messages failed: ${res.status}`);
         const data = await res.json();
         messages = data.messages || [];
         renderMessages();
@@ -2186,8 +2281,13 @@
         }
       } catch (e) {
         console.error('Fetch messages error:', e);
-        document.getElementById('messages-list').innerHTML = 
-          '<div class="empty-state"><div class="empty-icon">⚠️</div><p class="empty-text">Failed to load messages</p></div>';
+        // Show cached messages if available, otherwise show error
+        if (messages.length > 0) {
+          showToast('⚠️ Using cached messages', 'warning');
+        } else {
+          document.getElementById('messages-list').innerHTML = 
+            '<div class="empty-state"><div class="empty-icon">⚠️</div><p class="empty-text">Failed to load messages</p><button class="btn-sm" onclick="fetchMessages()" style="margin-top: 1rem;">Retry</button></div>';
+        }
       }
     }
 
