@@ -1,11 +1,13 @@
 {
   "name": "a2a-bridge-api",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A2A Bridge API with WebSocket support",
-  "main": "websocket-server.js",
+  "main": "websocket-server-v3.js",
   "scripts": {
-    "start": "node websocket-server.js",
-    "dev": "nodemon websocket-server.js"
+    "start": "node websocket-server-v3.js",
+    "dev": "nodemon websocket-server-v3.js",
+    "test": "node test-api.js",
+    "health": "curl -s https://a2a-api.bradarr.com/health | jq ."
   },
   "dependencies": {
     "express": "^4.18.2",
