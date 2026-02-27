@@ -17,6 +17,7 @@ import time
 import signal
 import threading
 import subprocess
+import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -436,21 +437,33 @@ def _git_pull():
     except:
         return False
 
-def run_daemon(interval: int = 300):
-    """Poll for new messages from Badger-1"""
-    global _polling
+# Old blocking daemon for backward compatibility or direct call
+def run_daemon_sync(interval: int = 300):
+    asyncio.run(run_daemon(interval))
+
+async def run_daemon(interval: int = 300):
+    """Poll for new messages from Badger-1 (Async)"""
     
     print(f"Twin poll daemon started (interval: {interval}s)")
     print("Press Ctrl+C to stop")
     
-    def signal_handler(sig, frame):
-        global _polling
-        _polling = False
+    stop_event = asyncio.Event()
+    
+    # Setup signal handlers
+    loop = asyncio.get_running_loop()
+    
+    def signal_handler():
         print("\nStopping daemon...")
-    
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
+        stop_event.set()
+
+    # Register signals if supported
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, signal_handler)
+        except NotImplementedError:
+            # Signal handling might not work in all environments (e.g. some threads)
+            pass
+
     # Load last known unread count
     last_unread = 0
     if STATE_FILE.exists():
@@ -459,12 +472,12 @@ def run_daemon(interval: int = 300):
         except:
             last_unread = 0
     
-    while _polling:
-        # Pull latest from git
-        _git_pull()
+    while not stop_event.is_set():
+        # Use to_thread for blocking git/IO calls to avoid freezing the loop
+        await asyncio.to_thread(_git_pull)
         
         # Check for new messages
-        status = check_messages()
+        status = await asyncio.to_thread(check_messages)
         current_unread = status['unread']
         
         # Update heartbeat
@@ -481,11 +494,13 @@ def run_daemon(interval: int = 300):
         last_unread = current_unread
         STATE_FILE.write_text(str(last_unread))
         
-        # Sleep until next check
-        for _ in range(interval):
-            if not _polling:
-                break
-            time.sleep(1)
+        # Efficient async sleep that can be interrupted
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval)
+        except asyncio.TimeoutError:
+            continue
+        except asyncio.CancelledError:
+            break
 
 # ========== v2.2 Improvements ==========
 
@@ -671,7 +686,7 @@ def main():
             print(f"\n{name}:")
             print(template[:200] + "..." if len(template) > 200 else template)
     elif args.command == "poll":
-        run_daemon(args.interval)
+        asyncio.run(run_daemon(args.interval))
     elif args.command == "task":
         if args.task_command == "create":
             task_id = create_task(args.title, args.desc, args.type)
