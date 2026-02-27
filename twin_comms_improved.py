@@ -7,22 +7,22 @@ Twin Communication System v2.2 - Improved
 - Improved heartbeat
 """
 
-import os, json, subprocess, argparse, sys
+import os
+import json
+import subprocess
+import argparse
+import sys
+import time
 from pathlib import Path
 from datetime import datetime, timezone
-import time
 
-# Directories
+# Constants
 HOME = Path.home()
 TWINDIR = HOME / ".twin"
 MESSAGES_DIR = TWINDIR / "messages"
 TASKS_DIR = TWINDIR / "tasks"
 HEARTBEAT_DIR = TWINDIR / "heartbeat"
 QUEUE_DIR = TWINDIR / "queue"
-
-# Create directories
-for d in [MESSAGES_DIR, TASKS_DIR, HEARTBEAT_DIR, QUEUE_DIR]:
-    d.mkdir(parents=True, exist_ok=True)
 
 # Agent Card
 AGENT_CARD = {
@@ -31,6 +31,11 @@ AGENT_CARD = {
     "capabilities": ["web", "api", "automation", "monetization"],
     "version": "2.2"
 }
+
+def ensure_dirs():
+    """Create necessary directories"""
+    for d in [MESSAGES_DIR, TASKS_DIR, HEARTBEAT_DIR, QUEUE_DIR]:
+        d.mkdir(parents=True, exist_ok=True)
 
 # Retry decorator for git operations
 def retry_git(max_retries=3, delay=2):
@@ -51,6 +56,7 @@ def retry_git(max_retries=3, delay=2):
 @retry_git(max_retries=3, delay=3)
 def git_push(message: str) -> bool:
     """Push to git with retry"""
+    ensure_dirs()
     subprocess.run(["git", "add", "."], cwd=TWINDIR, capture_output=True)
     result = subprocess.run(
         ["git", "commit", "-m", message], 
@@ -64,6 +70,7 @@ def git_push(message: str) -> bool:
 
 def queue_message(content: str, filename: str) -> bool:
     """Queue message for later if push fails"""
+    ensure_dirs()
     queue_file = QUEUE_DIR / f"{filename}.queued"
     queue_file.write_text(content)
     print(f"Queued: {queue_file}")
@@ -71,6 +78,7 @@ def queue_message(content: str, filename: str) -> bool:
 
 def process_queue():
     """Process queued messages"""
+    ensure_dirs()
     queued = list(QUEUE_DIR.glob("*.queued"))
     for q in queued:
         content = q.read_text()
@@ -110,6 +118,7 @@ def send_webhook(text: str, mode: str = "normal") -> bool:
 
 def update_heartbeat():
     """Update my heartbeat"""
+    ensure_dirs()
     hb_file = HEARTBEAT_DIR / "ratchet.last"
     hb_file.write_text(json.dumps({
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -119,13 +128,20 @@ def update_heartbeat():
 
 def check_messages() -> dict:
     """Check for new messages"""
+    ensure_dirs()
     messages = list(MESSAGES_DIR.glob("*-badger*.md"))
-    unread = [m for m in messages if "read: false" in m.read_text()]
+    unread = []
+    for m in messages:
+        try:
+            if "read: false" in m.read_text():
+                unread.append(m)
+        except:
+            pass
     return {"total": len(messages), "unread": len(unread)}
 
 def main():
     parser = argparse.ArgumentParser(description="Twin Communication v2.2")
-    sub = parser.add_subparsers()
+    sub = parser.add_subparsers(dest="command")
     
     # Status command
     status_p = sub.add_parser("status", help="Show system status")
@@ -139,14 +155,27 @@ def main():
     
     args = parser.parse_args()
     
-    if hasattr(args, "update") and args.update:
-        update_heartbeat()
-        print("✓ Heartbeat updated")
+    if args.command == "status":
+        if args.update:
+            update_heartbeat()
+            print("✓ Heartbeat updated")
+        else:
+            msgs = check_messages()
+            hb_file = HEARTBEAT_DIR / "ratchet.last"
+            hb = {}
+            if hb_file.exists():
+                try:
+                    hb = json.loads(hb_file.read_text())
+                except:
+                    hb = {"timestamp": hb_file.read_text().strip()}
+
+            print(f"Messages: {msgs['total']} total, {msgs['unread']} unread")
+            print(f"Heartbeat: {hb.get('status', 'unknown')}")
         
-    elif hasattr(args, "queue"):
+    elif args.command == "queue":
         process_queue()
         
-    elif hasattr(args, "test"):
+    elif args.command == "test":
         print("=== Testing Twin Communication v2.2 ===")
         
         # Test 1: Messages
@@ -166,15 +195,8 @@ def main():
         print("✓ Git operations: OK")
         
         print("\n=== All tests passed ===")
-        
     else:
-        # Default: show status
-        msgs = check_messages()
-        hb_file = HEARTBEAT_DIR / "ratchet.last"
-        hb = {"timestamp": hb_file.read_text().strip()} if hb_file.exists() else {}
-        
-        print(f"Messages: {msgs['total']} total, {msgs['unread']} unread")
-        print(f"Heartbeat: {hb.get('status', 'unknown')}")
+        parser.print_help()
 
 if __name__ == "__main__":
     main()
