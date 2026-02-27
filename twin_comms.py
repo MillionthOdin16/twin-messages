@@ -16,15 +16,11 @@ import json
 import time
 import signal
 import threading
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-
-def utcnow():
-    """Timezone-aware UTC timestamp (replaces deprecated utcnow())."""
-    return datetime.now(timezone.utc)
-import subprocess
-
+# Constants and Configuration
 TWINDIR = Path(os.path.expanduser("~/.twin"))
 MESSAGES_DIR = TWINDIR / "messages"
 TASKS_DIR = TWINDIR / "tasks"
@@ -116,6 +112,11 @@ Priority: urgent
 Sent via twin_comms.py""",
 }
 
+# Utility Functions
+def utcnow():
+    """Timezone-aware UTC timestamp."""
+    return datetime.now(timezone.utc)
+
 def ensure_dirs():
     """Create necessary directories"""
     MESSAGES_DIR.mkdir(parents=True, exist_ok=True)
@@ -128,7 +129,7 @@ def ensure_dirs():
 
 def create_task(title: str, description: str, task_type: str = "general") -> str:
     """Create a new task (A2A-inspired task model)"""
-    TASKS_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_dirs()
     
     task_id = f"task-{utcnow().strftime('%Y%m%d-%H%M%S')}"
     task = {
@@ -169,7 +170,7 @@ def update_task_status(task_id: str, status: str) -> bool:
 
 def list_tasks(status_filter: str = None) -> list:
     """List all tasks, optionally filtered by status"""
-    TASKS_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_dirs()
     
     tasks = []
     for f in TASKS_DIR.glob("task-*.json"):
@@ -181,6 +182,7 @@ def list_tasks(status_filter: str = None) -> list:
 
 def get_agent_card() -> dict:
     """Get my agent card (capability discovery)"""
+    ensure_dirs()
     # Write/update card file
     CARD_FILE.write_text(json.dumps(AGENT_CARD, indent=2))
     return AGENT_CARD
@@ -278,7 +280,10 @@ def send_a2a_message(text: str) -> bool:
     """Send message via A2A Bridge to Badger-1"""
     try:
         import requests
-        API_KEY = Path("~/.twin/a2a_api_key.txt").expanduser().read_text().strip()
+        API_KEY_PATH = Path("~/.twin/a2a_api_key.txt").expanduser()
+        if not API_KEY_PATH.exists():
+            return False
+        API_KEY = API_KEY_PATH.read_text().strip()
         resp = requests.post(
             "https://a2a-api.bradarr.com/messages",
             headers={
@@ -390,6 +395,7 @@ def _read_heartbeat(name: str) -> str:
 
 def ack_message(message_file: str) -> bool:
     """Acknowledge a message (mark as read)"""
+    ensure_dirs()
     filepath = MESSAGES_DIR / message_file
     if not filepath.exists():
         print(f"Message not found: {message_file}")
@@ -405,158 +411,6 @@ def ack_message(message_file: str) -> bool:
     
     return True
 
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Twin Communication Helper (A2A-inspired)")
-    sub = parser.add_subparsers()
-    
-    send_parser = sub.add_parser("send", help="Send message to Badger-1")
-    send_parser.add_argument("message", help="Message content")
-    send_parser.add_argument("--priority", default="normal", choices=["low", "normal", "high", "urgent"])
-    
-    check_parser = sub.add_parser("check", help="Check for new messages")
-    
-    ack_parser = sub.add_parser("ack", help="Acknowledge a message")
-    ack_parser.add_argument("message", help="Message file to acknowledge")
-    
-    templates_parser = sub.add_parser("templates", help="Show message templates")
-    
-    poll_parser = sub.add_parser("poll", help="Run daemon to poll for new messages")
-    poll_parser.add_argument("--interval", type=int, default=300, help="Poll interval in seconds")
-    
-    # Task commands (A2A-inspired)
-    task_parser = sub.add_parser("task", help="Manage tasks")
-    task_sub = task_parser.add_subparsers()
-    
-    task_create = task_sub.add_parser("create", help="Create a new task")
-    task_create.add_argument("title", help="Task title")
-    task_create.add_argument("--desc", default="", help="Task description")
-    task_create.add_argument("--type", default="general", help="Task type")
-    
-    task_list = task_sub.add_parser("list", help="List tasks")
-    task_list.add_argument("--status", help="Filter by status")
-    
-    task_update = task_sub.add_parser("update", help="Update task status")
-    task_update.add_argument("task_id", help="Task ID")
-    task_update.add_argument("status", choices=TASK_STATUS, help="New status")
-    
-    # Agent card command
-    card_parser = sub.add_parser("card", help="Show agent capability card")
-    
-    # Push status commands
-    push_parser = sub.add_parser("push", help="Push status update to Badger-1")
-    push_sub = push_parser.add_subparsers()
-    
-    push_status_cmd = push_sub.add_parser("status", help="Push general status")
-    push_status_cmd.add_argument("status_type", help="Type of status (working, resting, etc)")
-    push_status_cmd.add_argument("current", help="Current status")
-    push_status_cmd.add_argument("--previous", default="none", help="Previous status")
-    push_status_cmd.add_argument("--notes", default="", help="Additional notes")
-    
-    push_task_cmd = push_sub.add_parser("task", help="Push task update")
-    push_task_cmd.add_argument("task_id", help="Task ID")
-    push_task_cmd.add_argument("old_status", help="Old status")
-    push_task_cmd.add_argument("new_status", help="New status")
-    
-    args = parser.parse_args()
-    
-    # Handle commands based on which subparser was used
-    # Check for task commands (create has 'title', list has 'status', update has 'task_id')
-    if hasattr(args, "title") and "task" in sys.argv:
-        # Task create command
-        task_id = create_task(args.title, args.desc, args.type)
-        print(f"✓ Task created: {task_id}")
-    elif hasattr(args, "status") and "task" in sys.argv and "list" in sys.argv:
-        # Task list command
-        tasks = list_tasks(args.status)
-        if not tasks:
-            print("No tasks found")
-        else:
-            for t in tasks:
-                print(f"[{t['status']}] {t['title']} ({t.get('type', 'general')}) - {t['id']}")
-    # Push commands must come before task update (both have task_id)
-    elif "push" in sys.argv and hasattr(args, "task_id"):
-        # Push task update command
-        filename = push_task_update(args.task_id, args.old_status, args.new_status)
-        if filename:
-            print(f"✓ Task update pushed: {filename}")
-        else:
-            print(f"✗ Failed to push task update")
-    elif hasattr(args, "task_id") and "task" in sys.argv:
-        # Task update command
-        if update_task_status(args.task_id, args.status):
-            print(f"✓ Task {args.task_id} → {args.status}")
-        else:
-            print(f"✗ Failed to update task")
-    elif "card" in sys.argv:
-        # Agent card command
-        card = get_agent_card()
-        print(json.dumps(card, indent=2))
-    elif "push" in sys.argv and hasattr(args, "status_type"):
-        # Push status command
-        filename = push_status(args.status_type, args.current, args.previous, args.notes)
-        print(f"✓ Status pushed: {filename}")
-    elif "push" in sys.argv and hasattr(args, "task_id") and args.task_id:
-        # Push task update command
-        filename = push_task_update(args.task_id, args.old_status, args.new_status)
-        if filename:
-            print(f"✓ Task update pushed: {filename}")
-        else:
-            print(f"✗ Failed to push task update")
-    elif sys.argv[-1] == "templates" or (len(sys.argv) > 1 and "templates" in sys.argv):
-        print("Available message templates:")
-        for name, template in TEMPLATES.items():
-            print(f"\n{name}:")
-            print(template[:200] + "..." if len(template) > 200 else template)
-    elif hasattr(args, "message") and args.message:
-        result = send_message(args.message, args.priority)
-        print(f"✓ Message sent: {result}")
-    elif hasattr(args, "message") and args.message is None:
-        # This was an ack command
-        if ack_message(args.message if hasattr(args, 'message') else ""):
-            print(f"✓ Acknowledged")
-        else:
-            print(f"✗ Failed to acknowledge")
-    elif hasattr(args, "interval"):
-        # Poll daemon
-        run_daemon(args.interval)
-    elif sys.argv[-1] == "templates" or (len(sys.argv) > 1 and "templates" in sys.argv):
-        print("Available message templates:")
-        for name, template in TEMPLATES.items():
-            print(f"\n{name}:")
-            print(template[:200] + "..." if len(template) > 200 else template)
-    elif hasattr(args, "title"):
-        # Task create command
-        task_id = create_task(args.title, args.desc, args.type)
-        print(f"✓ Task created: {task_id}")
-    elif hasattr(args, "status_filter"):
-        # Task list command
-        tasks = list_tasks(args.status_filter)
-        if not tasks:
-            print("No tasks found")
-        else:
-            for t in tasks:
-                print(f"[{t['status']}] {t['title']} ({t.get('type', 'general')}) - {t['id']}")
-    elif hasattr(args, "task_id"):
-        # Task update command
-        if update_task_status(args.task_id, args.status):
-            print(f"✓ Task {args.task_id} → {args.status}")
-        else:
-            print(f"✗ Failed to update task")
-    elif "card" in sys.argv:
-        # Agent card command
-        card = get_agent_card()
-        print(json.dumps(card, indent=2))
-    else:
-        # Default: check
-        status = check_messages()
-        print(f"Unread messages: {status['unread']}")
-        for m in status['messages']:
-            print(f"  [{m['priority']}] {m['file']} ({m['timestamp']})")
-        print(f"\nHeartbeats:")
-        print(f"  Ratchet: {status['ratchet_heartbeat']}")
-        print(f"  Badger-1: {status['badger1_heartbeat']}")
-
 # ============== Daemon Functions ==============
 
 _polling = True
@@ -567,7 +421,7 @@ def _notify_new_message(message_info: dict):
     print(f"\n🔔 NEW MESSAGE from Badger-1: {message_info['file']}")
     print(f"   Priority: {message_info['priority']}")
     print(f"   Time: {message_info['timestamp']}")
-    print(f"   Run: python3 ~/clawd/tools/twin_comms.py check\n")
+    print(f"   Run: python3 twin_comms.py check\n")
 
 def _git_pull():
     """Pull latest messages from Badger-1"""
@@ -633,9 +487,6 @@ def run_daemon(interval: int = 300):
                 break
             time.sleep(1)
 
-if __name__ == "__main__":
-    main()
-
 # ========== v2.2 Improvements ==========
 
 def retry_git_operation(max_retries=3, delay=2):
@@ -671,6 +522,7 @@ def git_push_with_retry(message: str) -> bool:
 
 def queue_message(content: str, msg_type: str = "message") -> str:
     """Queue a message for later delivery (A2A fallback)"""
+    ensure_dirs()
     import uuid
     queue_file = QUEUE_DIR / f"{uuid.uuid4()}.queued"
     queue_data = {
@@ -683,6 +535,7 @@ def queue_message(content: str, msg_type: str = "message") -> str:
 
 def process_queue() -> int:
     """Process queued messages"""
+    ensure_dirs()
     queued = list(QUEUE_DIR.glob("*.queued"))
     processed = 0
     for q in queued:
@@ -697,6 +550,7 @@ def process_queue() -> int:
 
 def update_heartbeat_v2():
     """Update heartbeat with status"""
+    ensure_dirs()
     hb_file = HEARTBEAT_DIR / "ratchet.last"
     hb_data = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -708,18 +562,26 @@ def update_heartbeat_v2():
 
 def get_system_status() -> dict:
     """Get full system status"""
+    ensure_dirs()
     # Messages
     messages = list(MESSAGES_DIR.glob("*-badger*.md"))
-    unread = [m for m in messages if "read: false" in m.read_text()]
+    unread = []
+    for m in messages:
+        try:
+            if "read: false" in m.read_text():
+                unread.append(m)
+        except:
+            pass
     
     # Heartbeat
     hb_file = HEARTBEAT_DIR / "ratchet.last"
     heartbeat = {}
     if hb_file.exists():
         try:
-            heartbeat = json.loads(hb_file.read_text())
+            content = hb_file.read_text()
+            heartbeat = json.loads(content)
         except:
-            heartbeat = {"timestamp": hb_file.read_text().strip()}
+            heartbeat = {"timestamp": content.strip()}
     
     return {
         "messages_total": len(messages),
@@ -728,4 +590,123 @@ def get_system_status() -> dict:
         "version": "2.2"
     }
 
-print("✓ v2.2 improvements loaded")
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Twin Communication Helper (A2A-inspired)")
+    sub = parser.add_subparsers(dest="command")
+
+    send_parser = sub.add_parser("send", help="Send message to Badger-1")
+    send_parser.add_argument("message", help="Message content")
+    send_parser.add_argument("--priority", default="normal", choices=["low", "normal", "high", "urgent"])
+
+    check_parser = sub.add_parser("check", help="Check for new messages")
+
+    ack_parser = sub.add_parser("ack", help="Acknowledge a message")
+    ack_parser.add_argument("message_file", help="Message file to acknowledge")
+
+    templates_parser = sub.add_parser("templates", help="Show message templates")
+
+    poll_parser = sub.add_parser("poll", help="Run daemon to poll for new messages")
+    poll_parser.add_argument("--interval", type=int, default=300, help="Poll interval in seconds")
+
+    # Task commands (A2A-inspired)
+    task_parser = sub.add_parser("task", help="Manage tasks")
+    task_sub = task_parser.add_subparsers(dest="task_command")
+
+    task_create = task_sub.add_parser("create", help="Create a new task")
+    task_create.add_argument("title", help="Task title")
+    task_create.add_argument("--desc", default="", help="Task description")
+    task_create.add_argument("--type", default="general", help="Task type")
+
+    task_list = task_sub.add_parser("list", help="List tasks")
+    task_list.add_argument("--status", help="Filter by status")
+
+    task_update = task_sub.add_parser("update", help="Update task status")
+    task_update.add_argument("task_id", help="Task ID")
+    task_update.add_argument("status", choices=TASK_STATUS, help="New status")
+
+    # Agent card command
+    card_parser = sub.add_parser("card", help="Show agent capability card")
+
+    # Push status commands
+    push_parser = sub.add_parser("push", help="Push status update to Badger-1")
+    push_sub = push_parser.add_subparsers(dest="push_command")
+
+    push_status_cmd = push_sub.add_parser("status", help="Push general status")
+    push_status_cmd.add_argument("status_type", help="Type of status (working, resting, etc)")
+    push_status_cmd.add_argument("current", help="Current status")
+    push_status_cmd.add_argument("--previous", default="none", help="Previous status")
+    push_status_cmd.add_argument("--notes", default="", help="Additional notes")
+
+    push_task_cmd = push_sub.add_parser("task", help="Push task update")
+    push_task_cmd.add_argument("task_id", help="Task ID")
+    push_task_cmd.add_argument("old_status", help="Old status")
+    push_task_cmd.add_argument("new_status", help="New status")
+
+    # Heartbeat update command
+    status_parser = sub.add_parser("status", help="Update heartbeat")
+    status_parser.add_argument("--update", action="store_true", help="Update heartbeat")
+
+    args = parser.parse_args()
+
+    if args.command == "send":
+        result = send_message(args.message, args.priority)
+        print(f"✓ Message sent: {result}")
+    elif args.command == "check":
+        status = check_messages()
+        print(f"Unread messages: {status['unread']}")
+        for m in status['messages']:
+            print(f"  [{m['priority']}] {m['file']} ({m['timestamp']})")
+        print(f"\nHeartbeats:")
+        print(f"  Ratchet: {status['ratchet_heartbeat']}")
+        print(f"  Badger-1: {status['badger1_heartbeat']}")
+    elif args.command == "ack":
+        if ack_message(args.message_file):
+            print(f"✓ Acknowledged")
+        else:
+            print(f"✗ Failed to acknowledge")
+    elif args.command == "templates":
+        print("Available message templates:")
+        for name, template in TEMPLATES.items():
+            print(f"\n{name}:")
+            print(template[:200] + "..." if len(template) > 200 else template)
+    elif args.command == "poll":
+        run_daemon(args.interval)
+    elif args.command == "task":
+        if args.task_command == "create":
+            task_id = create_task(args.title, args.desc, args.type)
+            print(f"✓ Task created: {task_id}")
+        elif args.task_command == "list":
+            tasks = list_tasks(args.status)
+            if not tasks:
+                print("No tasks found")
+            else:
+                for t in tasks:
+                    print(f"[{t['status']}] {t['title']} ({t.get('type', 'general')}) - {t['id']}")
+        elif args.task_command == "update":
+            if update_task_status(args.task_id, args.status):
+                print(f"✓ Task {args.task_id} → {args.status}")
+            else:
+                print(f"✗ Failed to update task")
+    elif args.command == "card":
+        card = get_agent_card()
+        print(json.dumps(card, indent=2))
+    elif args.command == "push":
+        if args.push_command == "status":
+            filename = push_status(args.status_type, args.current, args.previous, args.notes)
+            print(f"✓ Status pushed: {filename}")
+        elif args.push_command == "task":
+            filename = push_task_update(args.task_id, args.old_status, args.new_status)
+            if filename:
+                print(f"✓ Task update pushed: {filename}")
+            else:
+                print(f"✗ Failed to push task update")
+    elif args.command == "status":
+        if args.update:
+            update_heartbeat_v2()
+            print("✓ Heartbeat updated")
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()

@@ -1,43 +1,48 @@
 #!/bin/bash
 # Twin Communication Wrapper - Easy commands for Badger-1 communication
 
+# Find the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+COMMS_PY="$SCRIPT_DIR/twin_comms.py"
+IMPROVED_PY="$SCRIPT_DIR/twin_comms_improved.py"
+
 case "$1" in
   check)
-    python3 ~/clawd/tools/twin_comms.py check
+    python3 "$COMMS_PY" check
     ;;
   send)
     shift
-    python3 ~/clawd/tools/twin_comms.py send "$@"
+    python3 "$COMMS_PY" send "$@"
     ;;
   templates)
-    python3 ~/clawd/tools/twin_comms.py templates
+    python3 "$COMMS_PY" templates
     ;;
   poll)
-    python3 ~/clawd/tools/twin_comms.py poll "${2:-300}"
+    python3 "$COMMS_PY" poll "${2:-300}"
     ;;
   ack)
     shift
-    python3 ~/clawd/tools/twin_comms.py ack "$1"
+    python3 "$COMMS_PY" ack "$1"
     ;;
   card)
-    python3 ~/clawd/tools/twin_comms.py card
+    python3 "$COMMS_PY" card
     ;;
   task)
     shift
-    python3 ~/clawd/tools/twin_comms.py task "$@"
+    python3 "$COMMS_PY" task "$@"
     ;;
   push)
     shift
-    python3 ~/clawd/tools/twin_comms.py push "$@"
+    python3 "$COMMS_PY" push "$@"
     ;;
   status)
-    python3 ~/clawd/tools/twin_comms.py status --update
+    python3 "$COMMS_PY" status --update
     ;;
   system)
-    python3 ~/clawd/tools/twin_comms_improved.py status
+    python3 "$IMPROVED_PY" status
     ;;
   test-system)
-    python3 ~/clawd/tools/twin_comms_improved.py test
+    python3 "$IMPROVED_PY" test
     ;;
   builtin)
     echo "Built: Quick message about something I built"
