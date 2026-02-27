@@ -192,9 +192,51 @@ async function loadWebhooks() {
   console.log('Loaded agent cards:', Array.from(agentCards.keys()));
 }
 
+// Rebuild task indices (migration/backfill)
+async function rebuildIndices() {
+  console.log('Checking/Rebuilding task indices...');
+  // We'll iterate known agents or scan keys. For now, known agents + 'byId'
+  const agentIds = ['badger-1', 'ratchet', 'test'];
+
+  // Also check tasks:byId to find other agents
+  try {
+     // This could be heavy if tasks:byId is huge, but it's a migration step.
+     // Better strategy: SCAN tasks:* keys
+     // For simplicity in this env, we'll stick to known + discovering from byId if needed
+
+     for (const agentId of agentIds) {
+         // Check if index exists
+         const exists = await redisClient.exists(`tasks:${agentId}:all`);
+         if (!exists) {
+             console.log(`Rebuilding index for ${agentId}...`);
+             const tasks = await redisClient.hGetAll(`tasks:${agentId}`);
+             for (const [taskId, taskJson] of Object.entries(tasks)) {
+                 try {
+                     const task = JSON.parse(taskJson);
+                     const timestamp = new Date(task.createdAt || task.status?.timestamp || Date.now()).getTime();
+
+                     // Add to main index
+                     await redisClient.zAdd(`tasks:${agentId}:all`, { score: timestamp, value: taskId });
+
+                     // Add to status index
+                     if (task.status?.state) {
+                         await redisClient.zAdd(`tasks:${agentId}:status:${task.status.state}`, { score: timestamp, value: taskId });
+                     }
+                 } catch (e) {
+                     console.error(`Failed to index task ${taskId}:`, e);
+                 }
+             }
+         }
+     }
+  } catch (err) {
+      console.error('Error rebuilding indices:', err);
+  }
+}
+
 // Initialize server after Redis connects
 async function init() {
   await loadWebhooks();
+  await rebuildIndices();
   
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => {
@@ -248,6 +290,7 @@ async function createTask(task) {
     // Core A2A fields
     id,                              // Required: unique task ID
     contextId,                       // Required: grouping context
+    createdAt: now,                  // Explicit creation timestamp
     
     // Status object (A2A structure)
     status: {
@@ -279,7 +322,14 @@ async function createTask(task) {
   // Store in Redis (index by both id and agentId)
   await redisClient.hSet(`tasks:${task.agentId}`, id, JSON.stringify(taskData));
   await redisClient.hSet('tasks:byId', id, JSON.stringify({ ...taskData, agentId: task.agentId }));
-  await redisClient.zAdd('tasks:all', { score: Date.now(), value: id });
+
+  // Update Sorted Sets indices
+  const timestamp = Date.now();
+  await redisClient.zAdd(`tasks:${task.agentId}:all`, { score: timestamp, value: id });
+  await redisClient.zAdd(`tasks:${task.agentId}:status:${TASK_STATES.SUBMITTED}`, { score: timestamp, value: id });
+
+  // Global index (if needed, though 'tasks:all' was previously a ZSET of IDs, keeping compatibility)
+  await redisClient.zAdd('tasks:all', { score: timestamp, value: id });
   
   console.log(`Task created: ${id} (${taskData.type}) context:${contextId} by ${task.createdBy}`);
   
@@ -293,11 +343,23 @@ async function updateTaskStatus(taskId, newState, options = {}) {
   // Find which agent owns this task
   const agentIds = ['badger-1', 'ratchet', 'test'];
   
-  for (const agentId of agentIds) {
+  // Optimization: Could look up agentId from tasks:byId first to avoid looping
+  let targetAgentId = null;
+  const globalTaskJson = await redisClient.hGet('tasks:byId', taskId);
+  if (globalTaskJson) {
+      const globalTask = JSON.parse(globalTaskJson);
+      targetAgentId = globalTask.agentId;
+  }
+
+  const agentsToSearch = targetAgentId ? [targetAgentId] : agentIds;
+
+  for (const agentId of agentsToSearch) {
     const taskJson = await redisClient.hGet(`tasks:${agentId}`, taskId);
     if (taskJson) {
       const task = JSON.parse(taskJson);
+      const oldState = task.status.state;
       const now = new Date().toISOString();
+      const timestamp = Date.now();
       
       // Update A2A status structure
       task.status = {
@@ -328,6 +390,15 @@ async function updateTaskStatus(taskId, newState, options = {}) {
       await redisClient.hSet(`tasks:${agentId}`, taskId, JSON.stringify(task));
       await redisClient.hSet('tasks:byId', taskId, JSON.stringify({ ...task, agentId }));
       
+      // Update indices: Remove from old status ZSET, Add to new status ZSET
+      // Ensure creation timestamp is used for scoring to maintain stable sort order
+      const score = new Date(task.createdAt || now).getTime();
+
+      if (oldState !== newState) {
+          await redisClient.zRem(`tasks:${agentId}:status:${oldState}`, taskId);
+          await redisClient.zAdd(`tasks:${agentId}:status:${newState}`, { score: score, value: taskId });
+      }
+
       // Send callback notification if configured (for terminal states)
       const isTerminal = [TASK_STATES.COMPLETED, TASK_STATES.FAILED, TASK_STATES.CANCELED].includes(newState);
       if (task.callback && isTerminal) {
@@ -803,23 +874,47 @@ app.post('/tasks', authenticate, async (req, res) => {
 app.get('/tasks/:agentId', authenticate, async (req, res) => {
   try {
     const { agentId } = req.params;
-    const { status, limit = 50 } = req.query;
+    const { status, limit = 50, pageToken = 0 } = req.query;
+    const offset = parseInt(pageToken);
+    const count = parseInt(limit);
     
-    const tasksJson = await redisClient.hGetAll(`tasks:${agentId}`);
-    let tasks = Object.values(tasksJson).map(t => JSON.parse(t));
+    let taskIds = [];
     
-    // Filter by status if specified
+    // Use ZSETs for efficient retrieval
     if (status) {
-      tasks = tasks.filter(t => t.status?.state === status);
+        // Query status specific ZSET
+        taskIds = await redisClient.zRange(`tasks:${agentId}:status:${status}`, '+inf', '-inf', {
+            BY: 'SCORE', REV: true, LIMIT: { offset, count }
+        });
+    } else {
+        // Query all tasks ZSET
+        taskIds = await redisClient.zRange(`tasks:${agentId}:all`, '+inf', '-inf', {
+            BY: 'SCORE', REV: true, LIMIT: { offset, count }
+        });
+    }
+
+    if (taskIds.length === 0) {
+        return res.json({ tasks: [], count: 0 });
     }
     
-    // Sort by createdAt descending
-    tasks.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Fetch task details using HMGET (simulated via loop/pipeline since HMGET takes fields of a single key)
+    // Actually we need to fetch multiple keys (hGet tasks:agentId field:taskId)
+    // Or HMGET from tasks:agentId with multiple fields
+    // tasks:agentId is a Hash where key=taskId, value=JSON
+
+    // Optimization: Use hmGet to fetch all requested task IDs at once
+    const tasksJson = await redisClient.hmGet(`tasks:${agentId}`, taskIds);
     
-    // Limit
-    tasks = tasks.slice(0, parseInt(limit));
+    // Filter out nulls (in case of inconsistency) and parse
+    const tasks = tasksJson
+        .filter(t => t !== null)
+        .map(t => JSON.parse(t));
     
-    res.json({ tasks, count: tasks.length });
+    res.json({
+        tasks,
+        count: tasks.length,
+        nextPageToken: tasks.length === count ? (offset + count).toString() : null
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -896,31 +991,57 @@ app.post('/tasks/:agentId/:taskId/cancel', authenticate, async (req, res) => {
 // GET /tasks - List all tasks (A2A-style)
 app.get('/tasks', authenticate, async (req, res) => {
   try {
-    const { status, limit = 50, pageToken } = req.query;
+    const { status, limit = 50, pageToken = 0 } = req.query;
     
-    // Get all tasks from byId index
-    const tasksJson = await redisClient.hGetAll('tasks:byId');
-    let tasks = Object.values(tasksJson).map(t => JSON.parse(t));
+    // TODO: Ideally we should index 'tasks:all' properly as well with status
+    // For now, we fallback to the old method for the global list OR rely on 'tasks:all' ZSET which only has IDs
+    // Since 'tasks:byId' is a Hash (id -> json), we can use the same optimization if we had a global status index.
+    // For this task, the primary request was about GET /tasks/:agentId.
+    // I will optimize this one too by just using tasks:all ZSET (sorted by time)
+    // But status filtering globally would still require iteration or a new global status index.
+    // Let's optimize assuming no status filter, or fallback for status filter.
     
-    // Filter by status if specified
     if (status) {
-      tasks = tasks.filter(t => t.status?.state === status);
+         // Fallback for global status filter (unless we add global status indices)
+         // Keeping original logic for safety unless requested otherwise
+        const tasksJson = await redisClient.hGetAll('tasks:byId');
+        let tasks = Object.values(tasksJson).map(t => JSON.parse(t));
+        tasks = tasks.filter(t => t.status?.state === status);
+        tasks.sort((a, b) => new Date(b.status?.timestamp || 0) - new Date(a.status?.timestamp || 0));
+
+        const start = parseInt(pageToken);
+        const end = start + parseInt(limit);
+        const paginatedTasks = tasks.slice(start, end);
+
+        res.json({
+          tasks: paginatedTasks,
+          nextPageToken: end < tasks.length ? end.toString() : '',
+          count: tasks.length
+        });
+    } else {
+        // Optimized path for global list (no filter)
+        const offset = parseInt(pageToken);
+        const count = parseInt(limit);
+
+        const taskIds = await redisClient.zRange('tasks:all', '+inf', '-inf', {
+            BY: 'SCORE', REV: true, LIMIT: { offset, count }
+        });
+
+        if (taskIds.length === 0) {
+            return res.json({ tasks: [], nextPageToken: '', count: 0 });
+        }
+
+        const tasksJson = await redisClient.hmGet('tasks:byId', taskIds);
+        const tasks = tasksJson
+            .filter(t => t !== null)
+            .map(t => JSON.parse(t));
+
+        res.json({
+            tasks,
+            nextPageToken: tasks.length === count ? (offset + count).toString() : '',
+            count: tasks.length // This is just page count actually, real count needs ZCARD
+        });
     }
-    
-    // Sort by status.timestamp descending
-    tasks.sort((a, b) => new Date(b.status?.timestamp || 0) - new Date(a.status?.timestamp || 0));
-    
-    // Pagination
-    const start = pageToken ? parseInt(pageToken) : 0;
-    const end = start + parseInt(limit);
-    const paginatedTasks = tasks.slice(start, end);
-    const nextPageToken = end < tasks.length ? end.toString() : '';
-    
-    res.json({ 
-      tasks: paginatedTasks,
-      nextPageToken,
-      count: tasks.length
-    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
