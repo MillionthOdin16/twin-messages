@@ -1027,7 +1027,10 @@ app.get('/messages/:agentId', async (req, res) => {
     const { limit = 50 } = req.query;
     
     const messages = await redisClient.lRange(`messages:${agentId}`, 0, parseInt(limit) - 1);
-    res.json({ messages: messages.map(m => JSON.parse(m)) });
+
+    // Optimized: avoid parsing and re-stringifying JSON
+    res.set('Content-Type', 'application/json');
+    res.send(`{"messages":[${messages.join(',')}]}`);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1038,7 +1041,10 @@ app.get('/messages/all', async (req, res) => {
   try {
     const { limit = 100 } = req.query;
     const messages = await redisClient.lRange('messages:all', 0, parseInt(limit) - 1);
-    res.json({ messages: messages.map(m => JSON.parse(m)) });
+
+    // Optimized: avoid parsing and re-stringifying JSON
+    res.set('Content-Type', 'application/json');
+    res.send(`{"messages":[${messages.join(',')}]}`);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
