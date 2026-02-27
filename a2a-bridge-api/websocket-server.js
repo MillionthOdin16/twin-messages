@@ -10,6 +10,21 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Authentication middleware
+function authenticate(req, res, next) {
+  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+  const expectedKey = process.env.A2A_API_KEY;
+
+  if (expectedKey && apiKey && apiKey === expectedKey) {
+    return next();
+  }
+
+  res.status(401).json({
+    error: 'Unauthorized',
+    message: 'Valid API key required in X-API-Key header or apiKey query parameter'
+  });
+}
+
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
@@ -153,7 +168,7 @@ wss.on('connection', (ws, req) => {
 // HTTP API (backward compatible + offline support)
 
 // POST /messages - Send via HTTP (fallback)
-app.post('/messages', async (req, res) => {
+app.post('/messages', authenticate, async (req, res) => {
   try {
     const message = {
       messageId: uuidv4(),
@@ -199,7 +214,7 @@ app.post('/messages', async (req, res) => {
 });
 
 // GET /messages/:agentId - Poll for messages (fallback)
-app.get('/messages/:agentId', async (req, res) => {
+app.get('/messages/:agentId', authenticate, async (req, res) => {
   try {
     const { agentId } = req.params;
     const { limit = 50 } = req.query;
@@ -212,7 +227,7 @@ app.get('/messages/:agentId', async (req, res) => {
 });
 
 // GET /messages/all - Observer view
-app.get('/messages/all', async (req, res) => {
+app.get('/messages/all', authenticate, async (req, res) => {
   try {
     const { limit = 100 } = req.query;
     const messages = await redisClient.lRange('messages:all', 0, parseInt(limit) - 1);
@@ -223,7 +238,7 @@ app.get('/messages/all', async (req, res) => {
 });
 
 // GET /agents - List connected agents
-app.get('/agents', (req, res) => {
+app.get('/agents', authenticate, (req, res) => {
   res.json({ 
     agents: Array.from(connectedAgents.keys()),
     count: connectedAgents.size
