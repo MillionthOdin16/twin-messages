@@ -1,0 +1,73 @@
+import time
+import os
+import shutil
+from pathlib import Path
+from datetime import datetime, timezone
+import twin_comms
+
+# Setup
+TEST_DIR = Path("./benchmark_tmp")
+if TEST_DIR.exists():
+    shutil.rmtree(TEST_DIR)
+TEST_DIR.mkdir()
+
+# Mocking constants in twin_comms for the test
+twin_comms.HEARTBEAT_DIR = TEST_DIR / "heartbeat"
+twin_comms.HEARTBEAT_DIR.mkdir()
+twin_comms.STATE_FILE = TEST_DIR / ".last_unread"
+twin_comms.MESSAGES_DIR = TEST_DIR / "messages"
+twin_comms.MESSAGES_DIR.mkdir()
+
+# Mock functions
+def mock_git_pull():
+    return True
+
+def mock_check_messages():
+    return {
+        "unread": 0,
+        "messages": [],
+        "ratchet_heartbeat": "now",
+        "badger1_heartbeat": "now"
+    }
+
+twin_comms._git_pull = mock_git_pull
+twin_comms.check_messages = mock_check_messages
+
+# Benchmark Loop
+ITERATIONS = 1000
+start_time = time.time()
+
+last_unread = 0
+
+print(f"Benchmarking {ITERATIONS} iterations of sync daemon loop logic...")
+
+for _ in range(ITERATIONS):
+    # Pull latest from git (mocked)
+    twin_comms._git_pull()
+
+    # Check for new messages (mocked)
+    status = twin_comms.check_messages()
+    current_unread = status['unread']
+
+    # Update heartbeat (The part we want to optimize)
+    with open(twin_comms.HEARTBEAT_DIR / "ratchet.last", "w") as f:
+        f.write(twin_comms.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"))
+
+    # Logic for notifications (minimal impact in this test as unread=0)
+    if current_unread > last_unread and last_unread > 0:
+        pass
+    elif current_unread > 0:
+        pass
+
+    last_unread = current_unread
+    # Write state file (The other part we want to optimize)
+    twin_comms.STATE_FILE.write_text(str(last_unread))
+
+end_time = time.time()
+duration = end_time - start_time
+
+print(f"Total time: {duration:.4f} seconds")
+print(f"Avg time per iteration: {duration/ITERATIONS:.6f} seconds")
+
+# Cleanup
+shutil.rmtree(TEST_DIR)

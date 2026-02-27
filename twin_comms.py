@@ -17,6 +17,8 @@ import time
 import signal
 import threading
 import subprocess
+import asyncio
+import aiofiles
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -437,39 +439,52 @@ def _git_pull():
         return False
 
 def run_daemon(interval: int = 300):
-    """Poll for new messages from Badger-1"""
+    """Poll for new messages from Badger-1 (Legacy Sync)"""
+    asyncio.run(run_daemon_async(interval))
+
+async def run_daemon_async(interval: int = 300):
+    """Poll for new messages from Badger-1 (Async optimized)"""
     global _polling
     
     print(f"Twin poll daemon started (interval: {interval}s)")
     print("Press Ctrl+C to stop")
     
-    def signal_handler(sig, frame):
+    loop = asyncio.get_running_loop()
+
+    def signal_handler():
         global _polling
         _polling = False
         print("\nStopping daemon...")
     
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    # Signal handling in asyncio
+    try:
+        loop.add_signal_handler(signal.SIGINT, signal_handler)
+        loop.add_signal_handler(signal.SIGTERM, signal_handler)
+    except NotImplementedError:
+        # Windows doesn't support add_signal_handler
+        pass
     
     # Load last known unread count
     last_unread = 0
     if STATE_FILE.exists():
         try:
-            last_unread = int(STATE_FILE.read_text())
+            async with aiofiles.open(STATE_FILE, mode='r') as f:
+                content = await f.read()
+                last_unread = int(content)
         except:
             last_unread = 0
     
     while _polling:
-        # Pull latest from git
-        _git_pull()
+        # Pull latest from git (blocking op run in executor)
+        await loop.run_in_executor(None, _git_pull)
         
-        # Check for new messages
-        status = check_messages()
+        # Check for new messages (blocking op run in executor)
+        status = await loop.run_in_executor(None, check_messages)
         current_unread = status['unread']
         
-        # Update heartbeat
-        with open(HEARTBEAT_DIR / "ratchet.last", "w") as f:
-            f.write(utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"))
+        # Update heartbeat - ASYNC I/O
+        async with aiofiles.open(HEARTBEAT_DIR / "ratchet.last", mode='w') as f:
+            await f.write(utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"))
         
         # Notify if new messages
         if current_unread > last_unread and last_unread > 0:
@@ -479,13 +494,16 @@ def run_daemon(interval: int = 300):
             print(f"[{datetime.now().strftime('%H:%M')}] {current_unread} unread from Badger-1")
         
         last_unread = current_unread
-        STATE_FILE.write_text(str(last_unread))
         
-        # Sleep until next check
+        # Write state file - ASYNC I/O
+        async with aiofiles.open(STATE_FILE, mode='w') as f:
+            await f.write(str(last_unread))
+
+        # Sleep until next check - ASYNC SLEEP
         for _ in range(interval):
             if not _polling:
                 break
-            time.sleep(1)
+            await asyncio.sleep(1)
 
 # ========== v2.2 Improvements ==========
 
