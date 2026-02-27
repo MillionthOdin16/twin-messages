@@ -7,6 +7,21 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Authentication middleware
+function authenticate(req, res, next) {
+  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+  const expectedKey = process.env.A2A_API_KEY;
+
+  if (expectedKey && apiKey && apiKey === expectedKey) {
+    return next();
+  }
+
+  res.status(401).json({
+    error: 'Unauthorized',
+    message: 'Valid API key required in X-API-Key header or apiKey query parameter'
+  });
+}
+
 // Redis connection
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 const client = redis.createClient({ url: redisUrl });
@@ -29,7 +44,7 @@ client.connect();
 */
 
 // POST /messages - Send a message
-app.post('/messages', async (req, res) => {
+app.post('/messages', authenticate, async (req, res) => {
   try {
     const message = {
       messageId: uuidv4(),
@@ -61,7 +76,7 @@ app.post('/messages', async (req, res) => {
 });
 
 // GET /messages/:agentId - Get messages for an agent
-app.get('/messages/:agentId', async (req, res) => {
+app.get('/messages/:agentId', authenticate, async (req, res) => {
   try {
     const { agentId } = req.params;
     const { since, limit = 50 } = req.query;
@@ -85,7 +100,7 @@ app.get('/messages/:agentId', async (req, res) => {
 });
 
 // GET /messages/all - Get all messages (observer view for Bradley)
-app.get('/messages/all', async (req, res) => {
+app.get('/messages/all', authenticate, async (req, res) => {
   try {
     const { limit = 100 } = req.query;
     const messages = await client.lRange('messages:all', 0, parseInt(limit) - 1);
@@ -107,7 +122,7 @@ app.get('/health', async (req, res) => {
 });
 
 // GET /agents - List active agents
-app.get('/agents', async (req, res) => {
+app.get('/agents', authenticate, async (req, res) => {
   try {
     const keys = await client.keys('messages:*');
     const agents = keys
@@ -120,7 +135,7 @@ app.get('/agents', async (req, res) => {
 });
 
 // DELETE /messages/:agentId - Clear messages (optional cleanup)
-app.delete('/messages/:agentId', async (req, res) => {
+app.delete('/messages/:agentId', authenticate, async (req, res) => {
   try {
     const { agentId } = req.params;
     await client.del(`messages:${agentId}`);

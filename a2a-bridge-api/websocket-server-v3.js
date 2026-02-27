@@ -590,12 +590,12 @@ wss.on('connection', (ws, req) => {
 // ==================== HTTP API ROUTES ====================
 
 // POST /messages - Send message (with automatic push)
-app.post('/messages', async (req, res) => {
+app.post('/messages', authenticate, async (req, res) => {
   try {
     const message = {
       messageId: uuidv4(),
       timestamp: new Date().toISOString(),
-      from: req.body.from,
+      from: req.body.from || req.authenticatedAgent,
       to: req.body.to,
       type: req.body.type || 'message',
       content: req.body.content,
@@ -622,7 +622,7 @@ app.post('/messages', async (req, res) => {
 });
 
 // POST /webhooks/register - Register agent webhook
-app.post('/webhooks/register', async (req, res) => {
+app.post('/webhooks/register', authenticate, async (req, res) => {
   try {
     const { agentId, webhookUrl, webhookToken } = req.body;
     
@@ -671,7 +671,7 @@ app.get('/webhooks/:agentId', (req, res) => {
 });
 
 // DELETE /webhooks/:agentId - Remove agent webhook
-app.delete('/webhooks/:agentId', async (req, res) => {
+app.delete('/webhooks/:agentId', authenticate, async (req, res) => {
   agentWebhooks.delete(req.params.agentId);
   await redisClient.hDel('a2a:webhooks', req.params.agentId);
   res.json({ success: true });
@@ -680,7 +680,7 @@ app.delete('/webhooks/:agentId', async (req, res) => {
 // ==================== API KEY MANAGEMENT ====================
 
 // POST /auth/keys - Generate new API key for agent
-app.post('/auth/keys', async (req, res) => {
+app.post('/auth/keys', authenticate, async (req, res) => {
   try {
     const { agentId } = req.body;
     
@@ -733,7 +733,7 @@ app.get('/auth/keys/:agentId', (req, res) => {
 });
 
 // DELETE /auth/keys/:agentId - Revoke API key
-app.delete('/auth/keys/:agentId', async (req, res) => {
+app.delete('/auth/keys/:agentId', authenticate, async (req, res) => {
   apiKeys.delete(req.params.agentId);
   await redisClient.hDel('a2a:apikeys', req.params.agentId);
   res.json({ success: true, message: 'API key revoked' });
@@ -1021,7 +1021,7 @@ app.get('/agents/cards', async (req, res) => {
 // ==================== MESSAGE ENDPOINTS ====================
 
 // GET /messages/:agentId - Poll for messages
-app.get('/messages/:agentId', async (req, res) => {
+app.get('/messages/:agentId', authenticate, async (req, res) => {
   try {
     const { agentId } = req.params;
     const { limit = 50 } = req.query;
@@ -1037,7 +1037,7 @@ app.get('/messages/:agentId', async (req, res) => {
 });
 
 // GET /messages/all - Observer view
-app.get('/messages/all', async (req, res) => {
+app.get('/messages/all', authenticate, async (req, res) => {
   try {
     const { limit = 100 } = req.query;
     const messages = await redisClient.lRange('messages:all', 0, parseInt(limit) - 1);
@@ -1234,7 +1234,7 @@ app.get('/agents/:agentId/status', async (req, res) => {
 });
 
 // GET /agents - List connected agents
-app.get('/agents', (req, res) => {
+app.get('/agents', authenticate, (req, res) => {
   const webhookInfo = Array.from(agentWebhooks.entries()).map(([agentId, config]) => ({
     agentId,
     hasUrl: !!(config.url || config),
@@ -1272,7 +1272,7 @@ app.get('/health', async (req, res) => {
 });
 
 // GET /stats - Quick stats summary
-app.get('/stats', async (req, res) => {
+app.get('/stats', authenticate, async (req, res) => {
   try {
     // Message counts
     const allMessages = await redisClient.lRange('messages:all', 0, -1);
