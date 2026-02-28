@@ -1894,7 +1894,7 @@ app.get('/agents/:agentId', async (req, res) => {
     
     res.json({
       agentId,
-      status: isConnected ? 'online' : (hasWebhook ? 'webhook' : 'offline'),
+      status: isConnected ? 'online' : (hasWebhook ? 'available' : 'offline'),
       isConnected,
       hasWebhook,
       hasApiKey,
@@ -2209,3 +2209,279 @@ app.get('/version', (req, res) => {
     changelog: 'https://github.com/MillionthOdin16/twin-messages/blob/main/CHANGELOG.md'
   });
 });
+// A2A Bridge API Server v2.2.0 - Enhanced with Dashboard Polling
+// This is a patch to add to the END of websocket-server-v3.js
+// Or use as a standalone upgrade module
+
+// ==================== DASHBOARD POLLING ENDPOINT ====================
+// GET /dashboard/poll - HTTP polling fallback for dashboard
+app.get('/dashboard/poll', async (req, res) => {
+  try {
+    const since = req.query.since ? new Date(req.query.since) : new Date(Date.now() - 60000); // 60s default
+    const limit = parseInt(req.query.limit) || 50;
+    
+    // Get recent messages
+    const allMessages = await redisClient.lRange('messages:all', 0, limit - 1);
+    const messages = allMessages.map(m => JSON.parse(m));
+    const recentMessages = messages.filter(m => new Date(m.timestamp) > since);
+    
+    // Get tasks
+    const allTasks = await redisClient.hGetAll('tasks:byId');
+    const tasks = Object.values(allTasks).map(t => JSON.parse(t));
+    const activeTasks = tasks.filter(t => !['completed', 'failed', 'canceled'].includes(t.status?.state));
+    
+    // Get agent statuses with proper activity tracking
+    const agentStatuses = {};
+    for (const agentId of ['badger-1', 'ratchet', 'test']) {
+      const webhookConfig = agentWebhooks.get(agentId);
+      const hasWebhook = !!webhookConfig;
+      const ws = connectedAgents.get(agentId);
+      const isConnected = ws && ws.readyState === WebSocket.OPEN;
+      
+      // Calculate last activity from messages
+      let lastActivity = null;
+      let messageCount = 0;
+      for (const msg of messages) {
+        if (msg.from === agentId || msg.to === agentId) {
+          messageCount++;
+          if (!lastActivity || new Date(msg.timestamp) > new Date(lastActivity)) {
+            lastActivity = msg.timestamp;
+          }
+        }
+      }
+      
+      // Fallback: if no messages but has webhook, use current time
+      if (!lastActivity && hasWebhook) {
+        lastActivity = new Date().toISOString();
+      }
+      
+      agentStatuses[agentId] = {
+        agentId,
+        status: isConnected ? 'online' : (hasWebhook ? 'available' : 'offline'),
+        isConnected,
+        hasWebhook,
+        hasApiKey: apiKeys.has(agentId),
+        lastActivity,
+        messageCount
+      };
+    }
+    
+    // Calculate unread/undelivered counts
+    const undeliveredCounts = {};
+    for (const agentId of ['badger-1', 'ratchet']) {
+      const agentMessages = await redisClient.lRange(`messages:${agentId}`, 0, 49);
+      let undelivered = 0;
+      for (const msgJson of agentMessages) {
+        const msg = JSON.parse(msgJson);
+        const receipt = await redisClient.hGet(`receipts:${msg.messageId}`, agentId);
+        if (!receipt) undelivered++;
+      }
+      undeliveredCounts[agentId] = undelivered;
+    }
+    
+    res.json({
+      timestamp: new Date().toISOString(),
+      since: since.toISOString(),
+      messages: {
+        total: messages.length,
+        recent: recentMessages,
+        undelivered: undeliveredCounts
+      },
+      tasks: {
+        total: tasks.length,
+        active: activeTasks.length,
+        completed: tasks.filter(t => t.status?.state === 'completed').length,
+        failed: tasks.filter(t => t.status?.state === 'failed').length
+      },
+      agents: agentStatuses,
+      webhooks: agentWebhooks.size,
+      apiKeys: apiKeys.size,
+      connectedWs: connectedAgents.size
+    });
+  } catch (err) {
+    console.error('Dashboard poll error:', err);
+    res.status(500).json({ error: err.message, timestamp: new Date().toISOString() });
+  }
+});
+
+// ==================== WEBSOCKET BROADCASTING ====================
+// Broadcast message to all connected dashboard clients when new message arrives
+async function broadcastToDashboard(message, eventType = 'message') {
+  let broadcastCount = 0;
+  wss.clients.forEach((ws) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      // Send to all connected clients (including dashboard)
+      try {
+        ws.send(JSON.stringify({
+          type: eventType,
+          timestamp: new Date().toISOString(),
+          message: message,
+          messageId: message.messageId
+        }));
+        broadcastCount++;
+      } catch (e) {
+        console.error('WebSocket broadcast error:', e.message);
+      }
+    }
+  });
+  return broadcastCount;
+}
+
+// ==================== ENHANCED DELIVERY WITH BROADCAST ====================
+// Override deliverMessage to also broadcast to dashboard
+const originalDeliverMessage = deliverMessage;
+deliverMessage = async function(message) {
+  // Call original delivery (webhook + WebSocket to recipient)
+  const result = await originalDeliverMessage(message);
+  
+  // Also broadcast to all dashboard clients
+  const broadcastCount = await broadcastToDashboard(message, 'new_message');
+  if (broadcastCount > 0) {
+    console.log(`Broadcast new message to ${broadcastCount} dashboard clients`);
+  }
+  
+  return result;
+};
+
+// ==================== BATCH DELIVERY STATUS ====================
+// GET /messages/batch-status - Get delivery status for multiple messages at once
+app.post('/messages/batch-status', async (req, res) => {
+  try {
+    const { messageIds, agentId } = req.body;
+    
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ error: 'messageIds array required' });
+    }
+    
+    const results = {};
+    const pipeline = redisClient.multi();
+    
+    for (const messageId of messageIds.slice(0, 100)) { // Limit to 100
+      pipeline.hGetAll(`receipts:${messageId}`);
+    }
+    
+    const receiptsArray = await pipeline.exec();
+    
+    for (let i = 0; i < receiptsArray.length; i++) {
+      const messageId = messageIds[i];
+      const receipts = receiptsArray[i];
+      
+      if (agentId && receipts) {
+        // Filter to specific agent
+        results[messageId] = receipts[agentId] ? JSON.parse(receipts[agentId]) : null;
+      } else {
+        // All receipts for this message
+        results[messageId] = {};
+        for (const [aid, receiptJson] of Object.entries(receipts || {})) {
+          try {
+            results[messageId][aid] = JSON.parse(receiptJson);
+          } catch (e) {
+            results[messageId][aid] = receiptJson;
+          }
+        }
+      }
+    }
+    
+    res.json({
+      messageIds,
+      statuses: results,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Batch status error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== AGENT PRESENCE ENDPOINT ====================
+// GET /agents/:agentId/presence - Real-time presence check
+app.get('/agents/:agentId/presence', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    const ws = connectedAgents.get(agentId);
+    const isConnected = ws && ws.readyState === WebSocket.OPEN;
+    const webhookConfig = agentWebhooks.get(agentId);
+    const hasWebhook = !!webhookConfig;
+    
+    // Quick undelivered count
+    const undelivered = await getUndeliveredMessages(agentId, 10);
+    
+    // Last message
+    const lastMsg = await redisClient.lRange(`messages:${agentId}`, 0, 0);
+    const lastMessage = lastMsg.length > 0 ? JSON.parse(lastMsg[0]) : null;
+    
+    res.json({
+      agentId,
+      present: isConnected || hasWebhook,
+      websocket: {
+        connected: isConnected,
+        connectedAt: ws?.connectedAt || null
+      },
+      webhook: {
+        configured: hasWebhook,
+        url: webhookConfig?.url ? webhookConfig.url.substring(0, 30) + '...' : null
+      },
+      inbox: {
+        undelivered: undelivered.length,
+        total: await redisClient.lLen(`messages:${agentId}`)
+      },
+      lastMessage: lastMessage ? {
+        messageId: lastMessage.messageId,
+        from: lastMessage.from,
+        timestamp: lastMessage.timestamp,
+        preview: lastMessage.content?.text?.substring(0, 50) || '(no content)'
+      } : null,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== HEALTH CHECK WITH DETAILS ====================
+// Enhanced health check
+app.get('/health/detailed', async (req, res) => {
+  try {
+    const redisPing = await redisClient.ping();
+    
+    // Count connections
+    let wsConnections = 0;
+    wss.clients.forEach(() => wsConnections++);
+    
+    res.json({
+      status: 'healthy',
+      version: '2.2.0',
+      timestamp: new Date().toISOString(),
+      services: {
+        redis: redisPing === 'PONG' ? 'connected' : 'error',
+        websocket: {
+          enabled: true,
+          connections: wsConnections
+        },
+        webhooks: {
+          enabled: true,
+          registered: agentWebhooks.size
+        }
+      },
+      stats: {
+        agents: Array.from(agentWebhooks.keys()),
+        apiKeys: apiKeys.size,
+        uptime: process.uptime()
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: 'unhealthy',
+      error: err.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+console.log('✅ A2A Bridge v2.2.0 enhancements loaded');
+console.log('   - Dashboard polling: /dashboard/poll');
+console.log('   - WebSocket broadcasting to dashboard');
+console.log('   - Batch delivery status: POST /messages/batch-status');
+console.log('   - Agent presence: /agents/:agentId/presence');
+console.log('   - Detailed health: /health/detailed');

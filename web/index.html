@@ -3074,4 +3074,285 @@
     });
   </script>
 </body>
+<!-- A2A Bridge Dashboard v2.2.0 Enhancements -->
+<!-- Add this to the END of web/index.html, before </body> -->
+
+<script>
+// ==================== DASHBOARD POLLING FALLBACK ====================
+// When WebSocket fails, use HTTP polling
+
+let dashboardPollInterval = null;
+let lastPollTime = null;
+let pollFailures = 0;
+const MAX_POLL_FAILURES = 5;
+
+function startDashboardPolling() {
+  if (dashboardPollInterval) return; // Already polling
+  
+  console.log('📡 Starting dashboard polling fallback...');
+  updateConnectionStatus('polling');
+  
+  // Poll immediately
+  dashboardPoll();
+  
+  // Then every 15 seconds
+  dashboardPollInterval = setInterval(dashboardPoll, 15000);
+}
+
+function stopDashboardPolling() {
+  if (dashboardPollInterval) {
+    clearInterval(dashboardPollInterval);
+    dashboardPollInterval = null;
+    console.log('🛑 Stopped dashboard polling (WebSocket connected)');
+  }
+}
+
+async function dashboardPoll() {
+  try {
+    const since = lastPollTime || new Date(Date.now() - 60000).toISOString();
+    const startTime = Date.now();
+    
+    const res = await fetch(`${API_URL}/dashboard/poll?since=${encodeURIComponent(since)}&limit=100`, {
+      headers: API_KEY ? { 'X-API-Key': API_KEY } : {}
+    });
+    
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    
+    const data = await res.json();
+    const latency = Date.now() - startTime;
+    
+    // Update connection state
+    pollFailures = 0;
+    document.getElementById('diag-latency').textContent = `${latency}ms`;
+    document.getElementById('diag-connection').textContent = 'polling';
+    document.getElementById('diag-connection').className = 'system-value';
+    
+    // Update stats
+    stats = {
+      messages: { 
+        total: data.messages.total,
+        byAgent: Object.fromEntries(
+          Object.entries(data.agents).map(([id, a]) => [id, a.messageCount])
+        )
+      },
+      tasks: { 
+        active: data.tasks.active,
+        total: data.tasks.total,
+        completed: data.tasks.completed,
+        failed: data.tasks.failed
+      },
+      agents: {
+        connected: Object.values(data.agents)
+          .filter(a => a.status === 'online')
+          .map(a => a.agentId),
+        webhooks: data.webhooks,
+        apiKeys: data.apiKeys,
+        lastActivity: Object.fromEntries(
+          Object.entries(data.agents).map(([id, a]) => [id, a.lastActivity])
+        )
+      }
+    };
+    
+    updateStats();
+    
+    // Update messages if new ones arrived
+    if (data.messages.recent.length > 0) {
+      // Merge new messages with existing
+      const newMessageIds = new Set(data.messages.recent.map(m => m.messageId));
+      messages = [...data.messages.recent, ...messages.filter(m => !newMessageIds.has(m.messageId))].slice(0, 500);
+      renderMessages();
+      
+      // Show toast for new messages
+      if (document.visibilityState === 'hidden') {
+        showToast(`📨 ${data.messages.recent.length} new message(s)`, 'info');
+      }
+    }
+    
+    // Update tasks
+    if (data.tasks.total > 0) {
+      fetchTasks();
+    }
+    
+    // Update agent cards
+    agents = Object.values(data.agents);
+    renderAgents();
+    
+    // Update system display
+    document.getElementById('sys-connected').textContent = data.connectedWs;
+    document.getElementById('sys-ws').textContent = data.connectedWs > 0 ? 'Connected' : 'Polling';
+    document.getElementById('sys-ws').className = data.connectedWs > 0 ? 'system-value healthy' : 'system-value';
+    document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+    
+    lastPollTime = data.timestamp;
+    
+  } catch (e) {
+    console.error('Dashboard poll failed:', e);
+    pollFailures++;
+    
+    if (pollFailures >= MAX_POLL_FAILURES) {
+      console.error('Max poll failures reached, stopping polling');
+      stopDashboardPolling();
+      updateConnectionStatus('error');
+      showToast('❌ Dashboard sync failed after 5 attempts', 'error');
+    }
+  }
+}
+
+// ==================== ENHANCED WEBSOCKET HANDLING ====================
+const originalConnectWebSocket = connectWebSocket;
+
+connectWebSocket = function() {
+  // Stop polling when attempting WebSocket connection
+  stopDashboardPolling();
+  
+  const wsUrl = API_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+  const wsAuthUrl = API_KEY ? 
+    `${wsUrl}/ws?agentId=dashboard&apiKey=${encodeURIComponent(API_KEY)}` : 
+    `${wsUrl}/ws?agentId=dashboard`;
+  
+  ws = new WebSocket(wsAuthUrl);
+
+  ws.onopen = () => {
+    statusDot.className = 'status-dot connected';
+    statusText.textContent = 'Real-time';
+    updateSystemWebSocketStatus('Connected');
+    
+    // Stop polling on successful WebSocket
+    stopDashboardPolling();
+    pollFailures = 0;
+    
+    if (wsReconnectTimer) {
+      clearInterval(wsReconnectTimer);
+      wsReconnectTimer = null;
+    }
+    showToast('🔌 WebSocket connected', 'success');
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      handleWsMessage(data);
+    } catch (e) {
+      console.error('WS parse error:', e);
+    }
+  };
+
+  ws.onerror = (err) => {
+    statusDot.className = 'status-dot error';
+    statusText.textContent = 'Error';
+    updateSystemWebSocketStatus('Error');
+    console.error('WebSocket error:', err);
+  };
+
+  ws.onclose = () => {
+    statusDot.className = 'status-dot polling';
+    statusText.textContent = 'Polling';
+    updateSystemWebSocketStatus('Disconnected');
+    
+    // Start polling when WebSocket closes
+    startDashboardPolling();
+    
+    // Attempt reconnection
+    if (!wsReconnectTimer) {
+      wsReconnectTimer = setInterval(() => {
+        if (!ws || ws.readyState === WebSocket.CLOSED) {
+          console.log('Attempting WebSocket reconnection...');
+          connectWebSocket();
+        }
+      }, 10000);
+    }
+  };
+};
+
+// ==================== BATCH DELIVERY STATUS ====================
+// Fetch delivery status for multiple messages efficiently
+async function fetchBatchDeliveryStatus(messageIds) {
+  if (!messageIds || messageIds.length === 0) return;
+  
+  try {
+    const res = await fetch(`${API_URL}/messages/batch-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageIds: messageIds.slice(0, 100) })
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      
+      // Update delivery status cache
+      for (const [messageId, status] of Object.entries(data.statuses)) {
+        deliveryStatus.set(messageId, {
+          messageId,
+          receipts: status || {},
+          deliveredTo: status ? Object.keys(status).filter(k => status[k]?.status === 'delivered' || status[k]?.status === 'read') : [],
+          timestamp: new Date().toISOString()
+        });
+        
+        // Update UI
+        const el = document.getElementById(`delivery-${messageId}`);
+        if (el) {
+          const delivery = getDeliveryIcon(deliveryStatus.get(messageId));
+          el.className = `delivery-status ${delivery.class}`;
+          el.innerHTML = `${delivery.icon} ${delivery.text}`;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Batch delivery status fetch failed:', e);
+  }
+}
+
+// ==================== IMPROVED MESSAGE RENDERING ====================
+// Render messages with batch delivery status fetching
+const originalRenderMessages = renderMessages;
+
+renderMessages = function() {
+  // Call original render
+  originalRenderMessages();
+  
+  // Batch fetch delivery status for visible messages
+  const visibleMessageIds = messages
+    .slice(0, 20) // First 20 messages
+    .filter(m => !deliveryStatus.has(m.messageId))
+    .map(m => m.messageId);
+  
+  if (visibleMessageIds.length > 0) {
+    // Debounce the batch fetch
+    clearTimeout(window._batchStatusTimeout);
+    window._batchStatusTimeout = setTimeout(() => {
+      fetchBatchDeliveryStatus(visibleMessageIds);
+    }, 500);
+  }
+};
+
+// ==================== VISIBILITY HANDLING ====================
+// Refresh when tab becomes visible
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    // Check if we need to sync
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      dashboardPoll();
+    }
+  }
+});
+
+// ==================== SERVICE WORKER (OPTIONAL) ====================
+// Uncomment to enable background sync
+/*
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(err => {
+    console.log('Service worker registration failed:', err);
+  });
+}
+*/
+
+console.log('✅ Dashboard v2.2.0 enhancements loaded');
+console.log('   - Automatic polling fallback when WebSocket fails');
+console.log('   - Batch delivery status fetching');
+console.log('   - Visibility-aware sync');
+console.log('   - Enhanced error recovery');
+</script>
+</body>
 </html>
