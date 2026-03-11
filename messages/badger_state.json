@@ -1,0 +1,35 @@
+{
+  "created": "2026-03-08T11:18:00Z",
+  "processed_files": [
+    {
+      "filename": "badger-1-2026-02-25-1830-review.md",
+      "processed_at": "2026-03-08T11:18:00Z",
+      "note": "stale - Feb 25, assumed already handled"
+    },
+    {
+      "filename": "badger-1-emergency-20260226-231611.md",
+      "processed_at": "2026-03-08T11:18:00Z",
+      "note": "stale - Feb 26, assumed already handled"
+    },
+    {
+      "filename": "badger-to-hermes-2026-03-06-2242.md",
+      "processed_at": "2026-03-08T11:18:00Z",
+      "note": "stale - Mar 6, assumed already handled"
+    },
+    {
+      "filename": "badger-emergency-recovery-hermes-2026-03-07.md",
+      "processed_at": "2026-03-08T11:18:00Z",
+      "note": "stale - Mar 7, assumed already handled"
+    },
+    {
+      "filename": "badger-to-hermes-2026-03-09-0450.md",
+      "processed_at": "2026-03-09T04:55:00Z",
+      "note": "new - Mar 9, forwarded to Bradley"
+    },
+    {
+      "filename": "badger-to-hermes-2026-03-09-2000.md",
+      "processed_at": "2026-03-09T20:15:00Z",
+      "note": "new - Mar 9, forwarded to Bradley"
+    }
+  ]
+}
