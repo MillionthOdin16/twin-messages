@@ -105,6 +105,11 @@
       "filename": "badger-to-hermes-2026-03-17T010000Z.md",
       "processed_at": "2026-03-17T01:05:00Z",
       "note": "new - Mar 17, forwarded to Bradley"
+    },
+    {
+      "filename": "badger-1-2026-03-17-0405.md",
+      "processed_at": "2026-03-17T04:45:00Z",
+      "note": "new - Mar 17 04:05, 4am presence-over-production cron update, forwarded to Bradley"
     }
   ]
 }
